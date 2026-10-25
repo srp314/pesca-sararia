@@ -122,6 +122,7 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
     <h2>Cómo jugar</h2>
     <ol>
       <li><b>Lanzar.</b> <kbd>Click derecho</kbd> carga la caña y otro click la suelta: cuanto más cargás, más lejos. El mouse apunta.</li>
+      <li><b>Elegir.</b> Las sombras en el agua son peces: más grande la sombra, más grande el pez, y lejos hay más grandes. Tirá cerca de una, no encima: si cae arriba, se espanta.</li>
       <li><b>Esperar.</b> Con <span class="ojo">Pez cerca</span>, no tires o tirá suave: si la tensión pasa «asusta», se va. Si la boya baja apenas, está picando: todavía no.</li>
       <li><b>Clavar.</b> Cuando la boya se hunde entera, <kbd>click izquierdo</kbd> y subí el mouse de golpe. Tenés menos de un segundo.</li>
       <li><b>Pelear.</b> Con flecha, corre: <kbd>click izquierdo</kbd> y tirá el mouse para el lado contrario. Sin flecha, descansa: <kbd>mantené click derecho</kbd> para cobrar. Barra roja: <kbd>mantené Q</kbd> para soltar tensión. Barra floja que titila: cobrá o se suelta. A 3 m es tuyo.</li>
@@ -157,6 +158,7 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
       <div class="dist" id="dist">—<small>m</small></div>
       <div class="mejor">Mejor<b id="mejor">—</b></div>
       <div class="mejor">Peces<b id="peces">0</b></div>
+      <div class="mejor">Más pesado<b id="pesado">—</b></div>
     </div>
     <div class="medidor" id="medCarga">
       <div class="barra" id="barra"><div class="relleno" id="relleno"></div><div class="fantasma" id="fantasma" hidden></div></div>
@@ -245,8 +247,10 @@ const SUSTO = 0.35;                       // tensión que asusta a un pez que se
 
 /* ——— La pelea: el pez tira y cede; vos aguantás, cobrás y bombeás ——— */
 // Tensión = lo que tira el pez (entero si aguantás la caña, 55 % si la dejás bajar y el freno da sedal)
-//         + 0,3 si cobrás + lo que sumen los bombeos. Pasar T_ROTURA más de 0,3 s corta; quedar bajo T_FLOJA 2,5 s, se suelta.
+//         + 0,3 si cobrás + lo que sumen los bombeos. Pasar T_ROTURA más de T_CORTE corta; quedar bajo T_FLOJA 2,5 s, se suelta.
 const T_ROTURA = 1.35, T_FLOJA = 0.2;
+const T_CORTE = 0.5;                      // segundos en rojo antes de cortar: el sedal cruje, cada vez más seguido
+const IGNORAR_TIRON_CLAVAR = 450;         // ms: lo que sigue del tirón con que clavaste no cuenta como tirada contra el pez
 const VEL_COBRO = 3.0;                    // m/s que cobrás mientras el pez cede
 const VEL_RECOGER = 7.0;                  // m/s que recogés la boya sin pez
 
@@ -460,19 +464,20 @@ function chapotear(x, z) {
   const dist = Math.hypot(x - pj.position.x, z - pj.position.z), s = 1 + dist / 18;
   anillo(x, z, 0, 1.3 * s, 0.9, 0.6);
   lanzarGotas(x, z, 7, 0.1, s);
-  sonChapoteo(dist);
+  sonChapoteo(dist, panDe(x, z));
 }
 
 /* ——— El pez: una sombra bajo la superficie y, al sacarlo, el pez colgando del sedal ——— */
 function texturaSombraPez() {
   const c = document.createElement('canvas'); c.width = 256; c.height = 128;
-  const g = c.getContext('2d'); g.filter = 'blur(6px)'; g.fillStyle = 'rgba(8,4,30,1)';
+  const g = c.getContext('2d'); g.filter = 'blur(4px)'; g.fillStyle = 'rgba(3,1,14,1)';
   g.beginPath(); g.ellipse(140, 64, 80, 26, 0, 0, Math.PI * 2); g.fill();          // el cuerpo, con la cabeza hacia +X
   g.beginPath(); g.moveTo(72, 64); g.lineTo(26, 34); g.lineTo(36, 64); g.lineTo(26, 94); g.closePath(); g.fill();
   return new THREE.CanvasTexture(c);
 }
+const TEX_SOMBRA = texturaSombraPez();
 const geoSombra = new THREE.PlaneGeometry(1.0, 0.5); geoSombra.rotateX(-Math.PI / 2);
-const sombraPez = new THREE.Mesh(geoSombra, new THREE.MeshBasicMaterial({ map: texturaSombraPez(), transparent: true, opacity: 0, depthWrite: false }));
+const sombraPez = new THREE.Mesh(geoSombra, new THREE.MeshBasicMaterial({ map: TEX_SOMBRA, transparent: true, opacity: 0, depthWrite: false }));
 sombraPez.visible = false; escena.add(sombraPez);
 const pezColgado = new THREE.Group(); pezColgado.visible = false; escena.add(pezColgado);
 {
@@ -480,6 +485,83 @@ const pezColgado = new THREE.Group(); pezColgado.visible = false; escena.add(pez
   poner(new THREE.SphereGeometry(1, 14, 10), escama, 0, -0.24, 0, pezColgado).scale.set(0.075, 0.24, 0.035);
   poner(new THREE.ConeGeometry(0.08, 0.13, 4), phong('#7b5cff'), 0, -0.5, 0, pezColgado).scale.set(1, 1, 0.3);
   poner(new THREE.SphereGeometry(0.012, 6, 4), new THREE.MeshBasicMaterial({ color: '#0b0820' }), 0, -0.07, 0.03, pezColgado);
+}
+
+/* ——— El cardumen: peces que se ven nadar antes de tirar ———
+   La sombra dice el tamaño, y lejos del muelle hay más chances de grandes: elegir dónde tirar es parte del juego.
+   Pica el pez más cercano a la boya (dentro de R_ATRAE), antes cuanto más cerca; una boya que cae encima lo espanta.
+   Las especies son nombres de trabajo por su manera de pelear, no nombres del mundo de Sararia. */
+const ESPECIES = {
+  corredor: { nombre: 'corredor', fuerza: 0.85, aguante: 0.8, corrida: [0.8, 1.5], lados: [-1, 1, -1, 1, 0], picadas: [2, 3], ventana: 0.75, acerca: 2.6, nada: 0.9, kg: 0.8, salta: 0 },
+  tirador: { nombre: 'tirador', fuerza: 1.05, aguante: 1.35, corrida: [2.2, 3.8], lados: [0, 0, 0, -1, 1], picadas: [0, 1], ventana: 1.1, acerca: 1.4, nada: 0.45, kg: 1.4, salta: 0 },
+  saltador: { nombre: 'saltador', fuerza: 1.0, aguante: 1.0, corrida: [1.2, 2.4], lados: [-1, 0, 1], picadas: [1, 2], ventana: 0.9, acerca: 2.0, nada: 0.7, kg: 1.0, salta: 0.45 }
+};
+const TAMANOS = {
+  // la sombra va más grande que el pez: vista casi de canto desde el muelle, una forma plana se achica mucho
+  chico: { k: 0.8, sombra: 1.0, escala: 0.8, kg: [0.3, 0.8] },
+  mediano: { k: 1.0, sombra: 1.6, escala: 1.0, kg: [1.0, 2.4] },
+  grande: { k: 1.15, sombra: 2.6, escala: 1.4, kg: [3.0, 6.0] }
+};
+const N_PECES = 10, R_ATRAE = 8, R_ESPANTA = 1.4;
+const cardumen = [];
+function lugarAlAzar(v) {   // en el agua de pesca: de 6 a 46 m del muelle, dentro de lo que se puede apuntar
+  const a = (azar() - 0.5) * 2 * rad(40), d = 6 + azar() * 40;
+  v.set(pj.position.x - Math.sin(a) * d, 0, pj.position.z - Math.cos(a) * d);
+  return d;
+}
+function tamanoSegun(d) {   // a 6 m: 5 % de grandes; a 44 m: 55 %
+  const g = 0.05 + 0.5 * clamp((d - 6) / 38, 0, 1), r = azar();
+  return r < g ? 'grande' : r < g + 0.35 ? 'mediano' : 'chico';
+}
+function especieAlAzar() { const r = azar(); return r < 0.4 ? 'corredor' : r < 0.72 ? 'saltador' : 'tirador'; }
+function poblar(f) {
+  const d = lugarAlAzar(f.pos), T = TAMANOS[f.tamano = tamanoSegun(d)];
+  f.especie = especieAlAzar();
+  f.kg = lerp(T.kg[0], T.kg[1], azar()) * ESPECIES[f.especie].kg;
+  f.rumbo = azar() * Math.PI * 2; f.estado = 'libre'; f.tCalma = 0; f.opac = 0; f.tOnda = azar() * 3;
+  f.sombra.scale.set(T.sombra, 1, T.sombra);
+}
+for (let i = 0; i < N_PECES; i++) {
+  const sombra = new THREE.Mesh(geoSombra, new THREE.MeshBasicMaterial({ map: TEX_SOMBRA, transparent: true, opacity: 0, depthWrite: false }));
+  sombra.visible = false; escena.add(sombra);
+  const f = { pos: new THREE.Vector3(), sombra }; poblar(f); f.opac = 0.45; cardumen.push(f);
+}
+function moverCardumen(dt, t) {
+  for (const f of cardumen) {
+    if (f.estado === 'ocupado') { f.sombra.visible = false; continue; }           // es el que está picando o peleando
+    if (f.estado === 'renacer') { f.sombra.visible = false; f.tRenacer -= dt; if (f.tRenacer <= 0) poblar(f); continue; }
+    let vel = ESPECIES[f.especie].nada * (f.tamano === 'grande' ? 0.8 : 1);
+    if (f.estado === 'espantado') { vel = 4; f.tEspanto -= dt; if (f.tEspanto <= 0) { f.estado = 'libre'; f.tCalma = 6; } }
+    else {
+      f.tCalma = Math.max(0, f.tCalma - dt);
+      f.rumbo += (azar() - 0.5) * dt * 1.4;                                          // deambula
+      const dx = f.pos.x - pj.position.x, dz = f.pos.z - pj.position.z, d = Math.hypot(dx, dz), ang = Math.atan2(-dx, -dz);
+      if (d < 6 || d > 46 || Math.abs(ang) > rad(42)) {                               // y si se sale del agua de pesca, vuelve
+        const objetivo = Math.atan2(-(pj.position.z - 26 - f.pos.z), pj.position.x - f.pos.x);
+        const dif = Math.atan2(Math.sin(objetivo - f.rumbo), Math.cos(objetivo - f.rumbo));
+        f.rumbo += clamp(dif, -1, 1) * dt * 1.5;
+      }
+    }
+    f.pos.x += Math.cos(f.rumbo) * vel * dt; f.pos.z -= Math.sin(f.rumbo) * vel * dt;
+    f.opac += (0.7 - f.opac) * clamp(dt * 1.5, 0, 1);
+    // cada tanto sube a la superficie y deja un anillo de su tamaño: se ve aunque la sombra quede de canto
+    f.tOnda -= dt;
+    if (f.tOnda <= 0) { f.tOnda = 2 + azar() * 3; anillo(f.pos.x, f.pos.z, 0, 0.55 * TAMANOS[f.tamano].sombra, 1.3, 0.4); }
+    f.sombra.visible = true; f.sombra.material.opacity = f.opac;
+    f.sombra.position.set(f.pos.x, olas(f.pos.x, f.pos.z, t) + 0.012, f.pos.z);
+    f.sombra.rotation.y = f.rumbo + Math.sin(t * 6 + f.pos.x) * 0.1;
+  }
+}
+// El pez libre más cercano a la boya se interesa: antes cuanto más cerca está (cerca de 1 s a 2 m; unos 3 s a 7 m).
+function buscarInteresado(dt, lx, lz) {
+  let elegido = null, dMin = R_ATRAE;
+  for (const f of cardumen) {
+    if (f.estado !== 'libre' || f.tCalma > 0) continue;
+    const d = Math.hypot(f.pos.x - lx, f.pos.z - lz);
+    if (d < dMin) { dMin = d; elegido = f; }
+  }
+  if (!elegido) return null;
+  return azar() < (0.25 + 0.9 * (1 - dMin / R_ATRAE)) * dt ? elegido : null;
 }
 
 /* ——— Sonido: todo sintetizado, arranca con el primer click ——— */
@@ -493,15 +575,19 @@ function ruido() {
   if (!bufRuido) { const n = ac.sampleRate; bufRuido = ac.createBuffer(1, n, n); const d = bufRuido.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; }
   return bufRuido;
 }
-function soplo(t0, dur, filtro, f0, f1, q, vol) {
+function salida(pan) {   // a dónde va un sonido: al centro, o a un costado (−1 izquierda, 1 derecha)
+  if (!pan || !ac.createStereoPanner) return ac.destination;
+  const p = ac.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); p.connect(ac.destination); return p;
+}
+function soplo(t0, dur, filtro, f0, f1, q, vol, pan) {
   const src = ac.createBufferSource(); src.buffer = ruido();
   const f = ac.createBiquadFilter(); f.type = filtro; f.Q.value = q;
   f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.6);
   const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + dur * 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  src.connect(f).connect(g).connect(ac.destination); src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.02);
+  src.connect(f).connect(g).connect(salida(pan)); src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.02);
 }
 function sonLatigazo(fuerza) { if (audioListo()) soplo(ac.currentTime, 0.3, 'bandpass', 380, 2200 + 1800 * fuerza, 1.4, 0.2 + 0.35 * fuerza); }
-function sonClic(vol) { if (audioListo()) soplo(ac.currentTime, 0.022, 'highpass', 2600, 3400, 0.7, vol); }
+function sonClic(vol, pan) { if (audioListo()) soplo(ac.currentTime, 0.022, 'highpass', 2600, 3400, 0.7, vol, pan); }
 function sonPlop(dist) {
   if (!audioListo()) return;
   const t0 = ac.currentTime, v = 0.55 / (1 + dist / 14);
@@ -527,8 +613,31 @@ function sonTiron(dist, v) {
 function sonPicada(dist) { tono(880, 520, 0.07, 0.1 / (1 + dist / 18)); }
 function sonEnganche() { tono(170, 60, 0.22, 0.45); if (audioListo()) soplo(ac.currentTime, 0.12, 'highpass', 2000, 3000, 0.8, 0.2); }
 function sonCaptura() { tono(660, 660, 0.2, 0.12); tono(990, 990, 0.35, 0.1, 0.12); }
-function sonChapoteo(dist) { if (audioListo()) soplo(ac.currentTime, 0.3, 'lowpass', 1500, 450, 0.7, 0.35 / (1 + dist / 14)); }
+function sonChapoteo(dist, pan) { if (audioListo()) soplo(ac.currentTime, 0.3, 'lowpass', 1500, 450, 0.7, 0.35 / (1 + dist / 14), pan); }
+// La nota del sedal durante la pelea: sube de tono y de volumen con la tensión, y suena del lado del pez.
+// Es un oscilador que vive toda la sesión; fuera de la pelea queda en silencio.
+let notaSedal = null;
+function sonarSedal() {
+  if (!ac) return;
+  if (!notaSedal) {
+    const osc = ac.createOscillator(); osc.type = 'sawtooth';
+    const filtro = ac.createBiquadFilter(); filtro.type = 'bandpass'; filtro.Q.value = 5;
+    const gain = ac.createGain(); gain.gain.value = 0;
+    const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    osc.connect(filtro).connect(gain);
+    if (pan) gain.connect(pan).connect(ac.destination); else gain.connect(ac.destination);
+    osc.start(); notaSedal = { osc, filtro, gain, pan };
+  }
+  const x = clamp((tension - T_FLOJA) / (T_ROTURA - T_FLOJA), 0, 1.2), ahora = ac.currentTime;
+  const activo = estado === 'enganchado' && !mudo;
+  notaSedal.osc.frequency.setTargetAtTime(130 + 480 * x, ahora, 0.05);
+  notaSedal.filtro.frequency.setTargetAtTime(280 + 1300 * x, ahora, 0.05);
+  notaSedal.gain.gain.setTargetAtTime(activo ? 0.01 + 0.045 * Math.min(1, x) : 0, ahora, 0.08);
+  if (notaSedal.pan) notaSedal.pan.pan.setTargetAtTime(activo ? panPez() : 0, ahora, 0.1);
+}
 function sonCorte() { if (!audioListo()) return; soplo(ac.currentTime, 0.09, 'highpass', 3500, 6000, 0.9, 0.35); tono(1400, 260, 0.16, 0.14); }
+// el sedal que cruje en rojo: más fuerte y más agudo cuanto más cerca está de cortarse (u de 0 a 1)
+function sonCrujido(u, pan) { if (audioListo()) soplo(ac.currentTime, 0.04, 'bandpass', 1500 + 1500 * u, 900, 3, 0.07 + 0.13 * u, pan); }
 
 /* ——— Estado del juego ——— */
 let estado = 'listo';                     // listo · cargando · lanzando · vuelo · agua · recogiendo
@@ -539,13 +648,27 @@ let yaw = 0, yawObj = 0, camYaw = 0, golpeFov = 0;
 let ultimo = 0, mejor = 0, acumClic = 0, lineaPrev = 0;
 let tension = 0, pico = 0, gesto = null, angTiron = 0, holgura = 1, hundir = 0, hundirVis = 0, capturas = 0, avisoT = 0, angBase = ANG_REPOSO;
 let pelea = null, cobrando = false, cobrandoTactil = false, botones = 0;
-let soltando = false, teclaQ = false, soltandoTactil = false, angLado = 0;
+let soltando = false, teclaQ = false, soltandoTactil = false, angLado = 0, qUsada = false;
 // fases del pez: nada · espera · acercando · picando · mordida · enganchado · huyendo
-const pez = { fase: 'nada', t: 0, pos: new THREE.Vector3(), rumbo: 0, opac: 0, mordidas: 0, picada: -1, chapoteo: 0, colgado: 0 };
+// ref: el pez del cardumen que está picando o peleando; especie, tamano y kg son los suyos (quedan hasta el próximo)
+const pez = { fase: 'nada', t: 0, pos: new THREE.Vector3(), rumbo: 0, opac: 0, mordidas: 0, picada: -1, chapoteo: 0, colgado: 0,
+  salto: -1, ref: null, especie: null, tamano: 'mediano', kg: 0 };
+let pesoMax = 0, ultimoInput = performance.now(), inactivo = 0, ultimaCaida = null;
 const r2 = (x) => Math.round(x * 100) / 100;
 window.__pesca = () => ({ estado, fase: pez.fase, tension: r2(tension), capturas,   // lectura para depurar
   boya: enAgua ? r2(Math.hypot(enAgua.ox - pj.position.x, enAgua.oz - pj.position.z)) : null,
-  pelea: pelea ? { dist: r2(Math.hypot(pelea.p.x - pj.position.x, pelea.p.z - pj.position.z)), modo: pelea.modo, lado: pelea.lado, energia: r2(pelea.energia), soltando } : null });
+  pelea: pelea ? { dist: r2(Math.hypot(pelea.p.x - pj.position.x, pelea.p.z - pj.position.z)), modo: pelea.modo, lado: pelea.lado, energia: r2(pelea.energia), soltando,
+    avisoQ: pelea.avisoQ, tRotura: r2(pelea.tRotura), gracia: r2(pelea.gracia) } : null,
+  qUsada, avisosQ: med.avisosQ, aviso: elAviso.textContent,
+  sedal: notaSedal ? { hz: Math.round(notaSedal.osc.frequency.value), vol: r2(notaSedal.gain.gain.value * 100) / 100, pan: notaSedal.pan ? r2(notaSedal.pan.pan.value) : null } : null,
+  flecha: elFlecha.hidden ? null : { transform: elFlecha.style.transform.replace(/.*scale/, 'scale'), color: elFlecha.style.color },
+  pez: pez.especie ? { especie: pez.especie.nombre, tamano: pez.tamano, kg: r1(pez.kg) } : null, pesoMax: r1(pesoMax), lancesCerca: med.lancesCerca, ultimaCaida });
+// para las pruebas automáticas: dónde está cada pez (distancia al muelle y ángulo para apuntar), y marcar la sesión como prueba
+window.__cardumen = () => cardumen.map((f) => ({ estado: f.estado, especie: f.especie, tamano: f.tamano, kg: r1(f.kg), rumbo: r2(f.rumbo), vel: ESPECIES[f.especie].nada * (f.tamano === 'grande' ? 0.8 : 1),
+  x: r2(f.pos.x - pj.position.x), z: r2(f.pos.z - pj.position.z),
+  d: r1(Math.hypot(f.pos.x - pj.position.x, f.pos.z - pj.position.z)), angGrados: r1(Math.atan2(-(f.pos.x - pj.position.x), -(f.pos.z - pj.position.z)) * 180 / Math.PI) }));
+window.__marcarPrueba = () => { med.comentario = 'PRUEBA AUTOMATICA DE CLAUDE, ignorar'; };
+window.__med = () => JSON.parse(JSON.stringify(med));
 const se = { p: new THREE.Vector3(0, 2.5, 0), prev: new THREE.Vector3(0, 2.5, 0) };
 const tip = new THREE.Vector3(), mano = new THREE.Vector3(), _v = new THREE.Vector3();
 const reducir = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -556,7 +679,7 @@ const tactil = window.matchMedia && matchMedia('(pointer: coarse)').matches;
    (window.__guardarPartida) la agrega sólo esa versión, así que acá guardarMed() no hace nada.
    Se guarda en momentos con sentido: el primer lance, cada 5 lances, cada pelea terminada, al terminar y al irse. */
 const MODO_PRUEBA = (document.querySelector('meta[name="pesca:modo"]') || {}).content === 'prueba';
-const VERSION_JUEGO = '2026-10-25b';     // se ve junto al título: cambiarla en cada publicación
+const VERSION_JUEGO = '2026-10-25c';     // se ve junto al título: cambiarla en cada publicación
 const r1 = (x) => Math.round(x * 10) / 10;
 const med = {
   sesion: Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
@@ -564,21 +687,25 @@ const med = {
   pantalla: window.innerWidth + 'x' + window.innerHeight,
   segundos: 0, primerLanceSeg: null, ayudaAbierta: false,
   lances: 0, distancias: [], peces: 0, asustados: 0, mordidas: 0, seFueron: 0, enganchados: 0,
-  reaccionMs: [], peleas: [], capturas: 0, diversion: null, comentario: '', terminada: false, estadoAlGuardar: ''
+  reaccionMs: [], peleas: [], capturas: 0, diversion: null, comentario: '', terminada: false, estadoAlGuardar: '',
+  avisosQ: 0, inactivoSeg: 0, pesoMax: 0, lancesCerca: 0
 };
 let peleaMed = null, guardando = false, guardarDeNuevo = false, tMordida = 0, soltandoAntes = false;
 async function guardarMed() {
   if (!window.__guardarPartida) return;
   if (guardando) { guardarDeNuevo = true; return; }   // una escritura a la vez; la que espera sale con los datos al día
   guardando = true;
-  med.segundos = Math.round(tiempo); med.estadoAlGuardar = estado; med.capturas = capturas;
+  med.segundos = Math.round(tiempo); med.estadoAlGuardar = estado; med.capturas = capturas; med.inactivoSeg = Math.round(inactivo);
   try { await window.__guardarPartida(med.sesion, JSON.parse(JSON.stringify(med))); } catch (e) { /* sin red o rechazada: va en el próximo guardado */ }
   guardando = false;
   if (guardarDeNuevo) { guardarDeNuevo = false; guardarMed(); }
 }
 function finPelea(resultado) {
   if (!peleaMed) return;
-  if (med.peleas.length < 100) med.peleas.push({ seg: r1(tiempo - peleaMed.t0), resultado, usosQ: peleaMed.usosQ, bien: r2(peleaMed.bien), mal: r2(peleaMed.mal) });
+  // por qué terminó: tensión máxima, tiempo en rojo, y hacia dónde corría (lado) y qué hacía (modo) en ese momento
+  if (med.peleas.length < 100) med.peleas.push({ seg: r1(tiempo - peleaMed.t0), resultado, usosQ: peleaMed.usosQ, bien: r2(peleaMed.bien), mal: r2(peleaMed.mal),
+    especie: peleaMed.especie, tamano: peleaMed.tamano, kg: peleaMed.kg, distIni: peleaMed.distIni, tensionMax: r2(peleaMed.tensionMax), rojoSeg: r1(peleaMed.rojoSeg),
+    saltos: peleaMed.saltos, lado: pelea ? pelea.lado : null, modo: pelea ? pelea.modo : null });
   peleaMed = null;
   guardarMed();
 }
@@ -604,7 +731,18 @@ function caer(t) {
   estado = 'agua';
   const { destino, R } = vuelo;
   enAgua = { x: destino.x, z: destino.z, ox: destino.x, oz: destino.z, R, tAnillo: 1.4, t0: t };
-  pez.fase = 'espera'; pez.t = 2.5 + azar() * 3.5; tension = 0; pico = 0;
+  pez.fase = 'espera'; tension = 0; pico = 0;
+  // las sombras que estaban justo donde cayó la boya se espantan; si había alguna a tiro, el lance cuenta como bien elegido
+  let aTiro = false, espantados = 0, masCerca = Infinity;
+  for (const f of cardumen) {
+    if (f.estado !== 'libre') continue;
+    const d = Math.hypot(f.pos.x - destino.x, f.pos.z - destino.z);
+    masCerca = Math.min(masCerca, d);
+    if (d < R_ESPANTA) { f.estado = 'espantado'; f.tEspanto = 1.2; f.rumbo = Math.atan2(-(f.pos.z - destino.z), f.pos.x - destino.x); espantados++; }
+    else if (d < R_ATRAE) aTiro = true;
+  }
+  if (aTiro) med.lancesCerca++;
+  ultimaCaida = { espantados, masCerca: r1(masCerca) };
   salpicar(destino.x, destino.z, cargaSoltada, R);
   sonPlop(R);
   // la distancia se mide sobre el agua, de la punta del muelle al punto de caída
@@ -655,6 +793,7 @@ function contraCorrida() {
 // Tirar del pez: lo que va contra la corrida lo arrima, lo cansa y le acorta la corrida, y tensa un poco
 // (por eso, con el pez fresco, cada tantos tirones hay que soltar con Q); lo que va a favor o cruzado sólo tensa, y mucho.
 function tirarDelPez(dx, dy, dts) {
+  if (performance.now() < pelea.ignorarHasta) return;          // todavía es el tirón con que lo clavaste
   const largo = Math.hypot(dx, dy); if (largo < 1e-5) return;
   const v = Math.min(6, largo / dts), c = contraCorrida();
   const a = dx * c.x + dy * c.y, cruzado = Math.abs(dx * c.y - dy * c.x);
@@ -669,16 +808,22 @@ function tirarDelPez(dx, dy, dts) {
 }
 function pelear(dt, t) {
   const P = pelea.p;
+  const esp = pelea.esp;
   pelea.modoT -= dt;
   if (pelea.modoT <= 0) {
-    if (pelea.modo === 'cede' && pelea.energia > 0.12) { pelea.modo = 'tira'; pelea.modoT = (1 + 2 * pelea.energia) * (0.7 + azar() * 0.6); pelea.lado = elegirLado(pelea.lado); }
-    else { pelea.modo = 'cede'; pelea.modoT = 1.4 + azar() * 1.2; }
+    if (pelea.modo === 'cede' && pelea.energia > 0.12) {
+      pelea.modo = 'tira'; pelea.lado = elegirLado(pelea.lado, esp.lados);
+      pelea.modoT = lerp(esp.corrida[0], esp.corrida[1], azar()) * (0.6 + 0.6 * pelea.energia);   // cada especie corre a su manera
+    } else { pelea.modo = 'cede'; pelea.modoT = 1.4 + azar() * 1.2; }
   }
   const tira = pelea.modo === 'tira', aguanta = !!gesto;
-  // la fuerza baja con el cansancio, y la corrida viene a sacudones
-  const fuerza = (0.6 + 0.5 * pelea.energia) * (1 + 0.15 * Math.sin(t * 5));
-  // se cansa corriendo, y más rápido cuanto más le resistís; descansando recupera un poco
-  pelea.energia = clamp(pelea.energia + dt * (tira ? -(0.05 + (aguanta ? 0.08 : 0) + (cobrando ? 0.06 : 0)) : 0.02), 0, 1);
+  // la fuerza depende de la especie y el tamaño (k), baja con el cansancio, y la corrida viene a sacudones
+  const fuerza = (0.6 + 0.5 * pelea.energia) * pelea.k * (1 + 0.15 * Math.sin(t * 5));
+  pelea.fuerza = fuerza;
+  // el saltador sale del agua y sacude la cabeza mientras corre
+  if (tira && esp.salta && pez.salto < 0 && azar() < esp.salta * dt) saltar();
+  // se cansa corriendo, y más rápido cuanto más le resistís; los grandes y los tiradores aguantan más
+  pelea.energia = clamp(pelea.energia + dt * (tira ? -(0.05 + (aguanta ? 0.08 : 0) + (cobrando ? 0.06 : 0)) / pelea.aguante : 0.02), 0, 1);
   // el movimiento: radial (positivo = se aleja) y de costado. Cuando tira, el freno patina y cobrar no lo trae
   const dx = P.x - pj.position.x, dz = P.z - pj.position.z, D = Math.hypot(dx, dz), ux = dx / D, uz = dz / D;
   // corre para adentro (lado 0) o de costado (±1: derecha e izquierda vistas desde el muelle); con Q, el freno abierto le da sedal
@@ -696,25 +841,62 @@ function pelear(dt, t) {
   // el carrete: chilla cuando el pez saca sedal, cliquea cuando cobrás
   acumClic += Math.abs(vr) * dt;
   const paso = vr > 0 ? 0.09 : 0.35;
-  for (let n = 0; acumClic > paso && n < 3; n++) { acumClic -= paso; sonClic(vr > 0 ? (tira ? 0.05 : 0.02) : 0.035); }
+  for (let n = 0; acumClic > paso && n < 3; n++) { acumClic -= paso; sonClic(vr > 0 ? (tira ? 0.05 : 0.02) : 0.035, panPez()); }
   // la tensión
   // Q suelta: la tensión se cae rápido, también la de los tirones
   const objetivo = soltando ? 0.08 : (tira ? fuerza : 0.12) * (aguanta ? 1 : 0.55) + (cobrando ? 0.3 : 0);
   pelea.carga += (objetivo - pelea.carga) * clamp(dt * (soltando ? 10 : 6), 0, 1);
   if (soltando) pico *= Math.exp(-dt * 5);
   tension = pelea.carga + pico;
-  pelea.tRotura = tension > T_ROTURA ? pelea.tRotura + dt : 0;
+  if (peleaMed) { peleaMed.tensionMax = Math.max(peleaMed.tensionMax, tension); if (tension > T_ROTURA) peleaMed.rojoSeg += dt; }
+  // El respiro del enganche: mientras dura, la tensión de más NO cuenta. Antes contaba igual y el sedal se cortaba
+  // justo al terminar: 43 de 55 cortes de la primera prueba pasaron a los 0,8 s.
+  if (pelea.gracia > 0) pelea.gracia -= dt;
+  pelea.tRotura = tension > T_ROTURA && pelea.gracia <= 0 ? pelea.tRotura + dt : 0;
+  // en rojo, el sedal cruje cada vez más seguido: es el aviso de que se va a cortar
+  if (tension > T_ROTURA - 0.05) {
+    const u = clamp(pelea.tRotura / T_CORTE, 0, 1);
+    pelea.tCruje -= dt;
+    if (pelea.tCruje <= 0) { sonCrujido(u, panPez()); pelea.tCruje = lerp(0.18, 0.05, u); }
+  } else pelea.tCruje = 0;
+  // la primera vez que entra en rojo en cada pelea, hasta que se use la Q una vez, se la enseña en el momento
+  if (tension > T_ROTURA - 0.15 && !qUsada && !pelea.avisoQ) {
+    pelea.avisoQ = true; med.avisosQ++;
+    aviso(tactil ? 'Tocá Soltar para aflojar' : 'Mantené Q para soltar tensión', 'q', 2.6);
+  }
   // soltar durante una corrida no afloja del todo: el pez sigue tirando del sedal que sale
   pelea.tFloja = tension < T_FLOJA ? pelea.tFloja + dt * (soltando && tira ? 0.6 : 1) : 0;
-  if (pelea.gracia > 0) pelea.gracia -= dt;
   enAgua.ox = P.x; enAgua.oz = P.z;
-  if (pelea.gracia <= 0 && pelea.tRotura > 0.3) cortar();
+  if (pelea.tRotura > T_CORTE) cortar();
   else if (pelea.tFloja > 2.5) soltarse();
   else if (D <= 3) recoger();   // al alcance: lo sacás del agua
 }
-function elegirLado(anterior) {   // −1 izquierda, 0 adentro, +1 derecha; nunca dos corridas iguales seguidas
-  const opciones = [-1, 0, 1].filter((l) => l !== anterior);
-  return opciones[Math.floor(azar() * opciones.length)];
+// De qué lado suena algo en el agua (−1 izquierda, 1 derecha), según dónde está respecto de la cámara.
+const _pp = new THREE.Vector3();
+function panDe(x, z) {
+  _pp.set(x - camara.position.x, 0, z - camara.position.z);
+  const d = _pp.length() || 1;
+  return clamp((_pp.x * _r.x + _pp.z * _r.z) / d * 1.5, -1, 1);   // _r: la derecha de la cámara
+}
+// El pez en la pelea: dónde está, más hacia dónde corre (así la corrida se oye antes de verse).
+function panPez() {
+  if (!pelea) return 0;
+  return clamp(panDe(pelea.p.x, pelea.p.z) + (pelea.modo === 'tira' ? pelea.lado * 0.6 : 0), -1, 1);
+}
+function elegirLado(anterior, lados) {   // −1 izquierda, 0 adentro, +1 derecha, de los que usa la especie; nunca dos iguales seguidas
+  const opciones = (lados || [-1, 0, 1]).filter((l) => l !== anterior);
+  return opciones.length ? opciones[Math.floor(azar() * opciones.length)] : anterior;
+}
+function saltar() {   // sale del agua y sacude la cabeza: la tensión pega un pico (otra razón para tener la Q a mano)
+  pez.salto = 0; pico = Math.min(T_MAX, pico + 0.45);
+  if (peleaMed) peleaMed.saltos++;
+  pezColgado.scale.setScalar(TAMANOS[pez.tamano].escala);
+  chapotear(pelea.p.x, pelea.p.z);
+}
+function soltarRef() {   // el pez que se fue vuelve al cardumen, desconfiado un rato
+  const f = pez.ref; if (!f) return;
+  f.pos.copy(pez.pos); f.rumbo = pez.rumbo; f.estado = 'libre'; f.tCalma = 8; f.opac = 0.2;
+  pez.ref = null;
 }
 function huirDelMuelle() {
   pez.rumbo = Math.atan2(-(pez.pos.z - pj.position.z), pez.pos.x - pj.position.x);
@@ -736,7 +918,7 @@ function soltarse() {
   pintarLectura(false);
 }
 function morder() {
-  pez.fase = 'mordida'; pez.t = VENTANA_MORDIDA;
+  pez.fase = 'mordida'; pez.t = pez.especie ? pez.especie.ventana : VENTANA_MORDIDA;   // el tirador da más tiempo, el corredor menos
   med.mordidas++; tMordida = performance.now();
   const dist = Math.hypot(se.p.x - pj.position.x, se.p.z - pj.position.z);
   if (enAgua) { enAgua.ox += Math.cos(pez.rumbo) * 0.35; enAgua.oz = Math.min(enAgua.oz - Math.sin(pez.rumbo) * 0.35, pj.position.z - 2.5); }
@@ -746,25 +928,35 @@ function morder() {
 function enganchar() {
   estado = 'enganchado'; pez.fase = 'enganchado'; pez.chapoteo = 0.25; pico = 0;
   med.enganchados++; if (med.reaccionMs.length < 100) med.reaccionMs.push(Math.round(performance.now() - tMordida));   // cuánto tardó en clavar
-  peleaMed = { t0: tiempo, usosQ: 0, bien: 0, mal: 0 };
+  const esp = pez.especie || ESPECIES.saltador, T = TAMANOS[pez.tamano];
+  const distIni = Math.hypot(enAgua.x - pj.position.x, enAgua.z - pj.position.z);
+  peleaMed = { t0: tiempo, usosQ: 0, bien: 0, mal: 0, especie: esp.nombre, tamano: pez.tamano, kg: r1(pez.kg), distIni: r1(distIni), tensionMax: 0, rojoSeg: 0, saltos: 0 };
   if (gesto) { gesto.x0 = gesto.x; gesto.y0 = gesto.y; gesto.nx = gesto.ny = gesto.d = 0; }   // si seguís con el click apretado, ya estás aguantando
-  // arranca corriendo, con un respiro de 0,8 s antes de que la tensión pueda cortar
-  pelea = { p: new THREE.Vector3(enAgua.x, 0, enAgua.z), energia: 1, modo: 'tira', modoT: 1.6 + azar(), lado: elegirLado(null), carga: 0.6, tRotura: 0, tFloja: 0, gracia: 0.8, vx: 0, vz: 0 };
+  // arranca corriendo, con un respiro de 0,8 s antes de que la tensión pueda cortar; la fuerza (k) y el aguante salen de especie y tamaño
+  pelea = { p: new THREE.Vector3(enAgua.x, 0, enAgua.z), energia: 1, modo: 'tira', modoT: lerp(esp.corrida[0], esp.corrida[1], azar()) + 0.6, lado: elegirLado(null, esp.lados),
+    carga: 0.6, tRotura: 0, tFloja: 0, gracia: 0.8, vx: 0, vz: 0, ignorarHasta: performance.now() + IGNORAR_TIRON_CLAVAR, tCruje: 0, avisoQ: false, fuerza: 1,
+    esp, k: esp.fuerza * T.k, aguante: esp.aguante * T.k };
   aviso('¡Enganchado!', 'fijo');
   sonEnganche(); chapotear(se.p.x, se.p.z);
 }
 function sacarPez() {
-  recogida.sacado = true; pez.fase = 'nada'; pez.colgado = 2.6;
+  recogida.sacado = true; pez.fase = 'nada'; pez.colgado = 2.6; pez.salto = -1;
+  pezColgado.scale.setScalar(TAMANOS[pez.tamano].escala);
+  if (pez.ref) { pez.ref.estado = 'renacer'; pez.ref.tRenacer = 5 + azar() * 5; pez.ref = null; }   // en unos segundos aparece otro, en otro lado
   chapotear(se.p.x, se.p.z);
 }
 function capturar() {
-  capturas++; pintarLectura(false);
-  aviso('Capturado'); sonCaptura(); finPelea('capturado');
+  capturas++;
+  if (pez.kg > pesoMax) pesoMax = pez.kg;
+  med.pesoMax = r1(pesoMax);
+  pintarLectura(false);
+  aviso(`Capturado · ${pez.especie ? pez.especie.nombre : 'pez'} ${pez.tamano} · ${fmt(pez.kg)} kg`, null, 3);
+  sonCaptura(); finPelea('capturado');
 }
-function aviso(texto, tipo) {
+function aviso(texto, tipo, segundos) {
   elAviso.textContent = texto;
   elAviso.className = 'aviso visible' + (tipo === 'frio' ? ' frio' : '');
-  avisoT = tipo === 'fijo' ? 0 : 1.6;
+  avisoT = tipo === 'fijo' ? 0 : (segundos || 1.6);
 }
 function accion() {   // tocar en el táctil: cargar o soltar
   if (estado === 'listo') empezarCarga();
@@ -782,22 +974,24 @@ function actualizarPez(dt, t) {
   pez.t -= dt;
   const lx = se.p.x, lz = se.p.z, dist = Math.hypot(lx - pj.position.x, lz - pj.position.z);
   if (pez.fase === 'espera') {
-    if (pez.t <= 0) {
-      // aparece a 7 m de la boya, siempre del lado del lago, y nada hacia ella
-      const a = azar() * Math.PI * 2;
-      let x = lx + Math.cos(a) * 7, z = lz + Math.sin(a) * 7;
-      if (z > pj.position.z - 4) z = lz - Math.abs(Math.sin(a)) * 7 - 1;
-      pez.pos.set(x, 0, z); pez.opac = 0;
-      pez.fase = 'acercando'; pez.mordidas = 1 + Math.floor(azar() * 3); med.peces++;
+    // pica un pez del cardumen que esté cerca de la boya: si no hay ninguno a tiro, no pica nadie
+    const f = buscarInteresado(dt, lx, lz);
+    if (f) {
+      const esp = ESPECIES[f.especie];
+      pez.ref = f; f.estado = 'ocupado';
+      pez.pos.copy(f.pos); pez.rumbo = f.rumbo; pez.opac = f.opac;
+      pez.especie = esp; pez.tamano = f.tamano; pez.kg = f.kg;
+      sombraPez.scale.set(TAMANOS[f.tamano].sombra, 1, TAMANOS[f.tamano].sombra);
+      pez.fase = 'acercando'; pez.mordidas = esp.picadas[0] + Math.floor(azar() * (esp.picadas[1] - esp.picadas[0] + 1)); med.peces++;
     }
   } else if (pez.fase === 'acercando') {
-    const dx = lx - pez.pos.x, dz = lz - pez.pos.z, d = Math.hypot(dx, dz);
+    const dx = lx - pez.pos.x, dz = lz - pez.pos.z, d = Math.hypot(dx, dz), v = pez.especie.acerca;
     pez.rumbo = Math.atan2(-dz, dx);
-    pez.pos.x += dx / d * 2 * dt; pez.pos.z += dz / d * 2 * dt;
+    pez.pos.x += dx / d * v * dt; pez.pos.z += dz / d * v * dt;
     if (d < 0.5) { pez.fase = 'picando'; pez.t = 0.5 + azar() * 0.6; }
   } else if (pez.fase === 'huyendo') {
     pez.pos.x += Math.cos(pez.rumbo) * 5 * dt; pez.pos.z -= Math.sin(pez.rumbo) * 5 * dt;
-    if (pez.t <= 0) { pez.fase = estado === 'agua' ? 'espera' : 'nada'; pez.t = 3 + azar() * 4; }
+    if (pez.t <= 0) { soltarRef(); pez.fase = estado === 'agua' ? 'espera' : 'nada'; }
   } else {
     // picando, mordida, enganchado: la boca en la boya
     if (pez.fase === 'enganchado') pez.rumbo += Math.sin(t * 7) * 0.05;
@@ -817,7 +1011,17 @@ function actualizarPez(dt, t) {
       }
     }
   }
-  const opObj = pez.fase === 'espera' || pez.fase === 'huyendo' ? 0 : 0.6;
+  // el salto del saltador: el pez sale del agua en arco y vuelve a caer
+  if (pez.salto >= 0) {
+    pez.salto += dt; const u = pez.salto / 0.55;
+    if (u >= 1 || !pelea) { pez.salto = -1; if (!(pez.colgado > 0)) pezColgado.visible = false; if (pelea) chapotear(pez.pos.x, pez.pos.z); }
+    else {
+      pezColgado.visible = true;
+      pezColgado.position.set(pez.pos.x, olas(pez.pos.x, pez.pos.z, t) + 0.25 + Math.sin(Math.PI * u) * 1.1, pez.pos.z);
+      pezColgado.rotation.set(0, pez.rumbo, -Math.PI / 2 + (u - 0.5) * 2.2);
+    }
+  }
+  const opObj = pez.fase === 'espera' || pez.fase === 'huyendo' ? 0 : 0.75;
   pez.opac += (opObj - pez.opac) * clamp(dt * 4, 0, 1);
   sombraPez.visible = pez.opac > 0.01;
   sombraPez.material.opacity = pez.opac;
@@ -841,7 +1045,7 @@ function botonesMouse(e) {
   if ((subio & 1) && gesto) terminarTiron();
 }
 lienzo.addEventListener('pointerdown', (e) => {
-  audioListo();
+  audioListo(); ultimoInput = performance.now();
   if (e.pointerType === 'mouse') { botonesMouse(e); capturar_puntero(e); return; }
   toque = { x: e.clientX, y: e.clientY };
   if (conLinea()) { empezarTiron(e.clientX, e.clientY); capturar_puntero(e); }   // en el táctil, el dedo apoyado aguanta y arrastrar tira
@@ -858,9 +1062,10 @@ window.addEventListener('blur', () => { botones = 0; cobrandoTactil = false; sol
 // Q sostenida: soltar tensión
 const esQ = (e) => e.code === 'KeyQ' || e.key === 'q' || e.key === 'Q';
 const esCampo = (el) => !!el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT');
-window.addEventListener('keydown', (e) => { if (esQ(e) && !esCampo(e.target)) teclaQ = true; });
+window.addEventListener('keydown', (e) => { ultimoInput = performance.now(); if (esQ(e) && !esCampo(e.target)) teclaQ = true; });
 window.addEventListener('keyup', (e) => { if (esQ(e)) teclaQ = false; });
 window.addEventListener('pointermove', (e) => {
+  ultimoInput = performance.now();
   if (e.pointerType === 'mouse' && e.buttons !== botones) botonesMouse(e);
   if (gesto) { moverTiron(e.clientX, e.clientY); return; }
   if (estado !== 'listo' && estado !== 'cargando') return;
@@ -892,7 +1097,11 @@ function pintarFlecha() {
   const ang = Math.atan2(-(_q.y - _p.y) * H, (_q.x - _p.x) * W);
   const sx = clamp((_p.x + 1) / 2 * W + Math.cos(ang) * 44, 40, W - 40);
   const sy = clamp((1 - _p.y) / 2 * H + Math.sin(ang) * 44, 80, H - 170);
-  elFlecha.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%) rotate(${ang}rad)`;
+  // la intensidad: cuánto tira el pez ahora (crece, se afirma y se pone roja cuando tira fuerte)
+  const f = clamp((pelea.fuerza - 0.55) / 0.75, 0, 1);
+  elFlecha.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%) rotate(${ang}rad) scale(${0.75 + 0.75 * f})`;
+  elFlecha.style.opacity = String(0.5 + 0.5 * f);
+  elFlecha.style.color = f > 0.72 ? 'var(--peligro)' : 'var(--ambar)';
 }
 for (const m of [10, 20, 30, 40]) {
   const x = (m - R_MIN) / (R_MAX - R_MIN) * 100;
@@ -935,6 +1144,7 @@ function pintarLectura(record) {
   elDist.innerHTML = (ultimo ? fmt(ultimo) : '—') + '<small>m</small>'; distMostrada = null;
   elMejor.textContent = mejor ? fmt(mejor) + ' m' : '—';
   elPeces.textContent = capturas;
+  $('#pesado').textContent = pesoMax ? fmt(pesoMax) + ' kg' : '—';
   elDist.classList.toggle('nuevo', !!record);
   if (record) setTimeout(() => elDist.classList.remove('nuevo'), 1400);
 }
@@ -982,7 +1192,8 @@ function pintarResumen() {
   for (const [k, v] of filas) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); }
 }
 $('#btnEnviar').addEventListener('click', async () => {
-  med.diversion = nota; med.comentario = $('#comentario').value.slice(0, 1000); med.terminada = true;
+  const texto = $('#comentario').value.trim().slice(0, 1000);
+  med.diversion = nota; if (texto) med.comentario = texto; med.terminada = true;   // vacío no borra lo que hubiera
   if (!window.__guardarPartida) { $('#estadoEnvio').textContent = 'Esta versión no guarda resultados.'; return; }
   $('#estadoEnvio').textContent = 'Enviando…';
   await guardarMed();
@@ -1117,6 +1328,7 @@ function cuadro(ms) {
   cobrando = ((botones & 2) !== 0 || cobrandoTactil) && conLinea();
   soltando = (teclaQ || soltandoTactil) && estado === 'enganchado';
   if (soltando && !soltandoAntes && peleaMed) peleaMed.usosQ++;
+  if (soltando) qUsada = true;
   soltandoAntes = soltando;
   if (estado === 'enganchado') pelear(dt, t);
   if (estado === 'agua' && cobrando) {   // recoger la boya sin pez: viene hacia vos y, a 3 m, sale del agua
@@ -1126,6 +1338,7 @@ function cuadro(ms) {
     if (t - (enAgua.estela || 0) > 0.22) { enAgua.estela = t; anillo(enAgua.x, enAgua.z, 0, 0.5, 0.8, 0.3); }
     if (rd <= 3.2) recoger();
   }
+  moverCardumen(dt, t);
   actualizarPez(dt, t);
 
   // el señuelo
@@ -1207,6 +1420,7 @@ function cuadro(ms) {
   if (elCobrar.hidden === verCobrar) elCobrar.hidden = !verCobrar;
   if (elSoltar.hidden === verSoltar) elSoltar.hidden = !verSoltar;
   pintarFlecha();
+  sonarSedal();
   if (verTension) {
     // un pez que se acerca o pica se asusta si la tensión pasa SUSTO: se avisa, y la barra se pone roja antes de llegar
     const pezCerca = estado === 'agua' && (pez.fase === 'acercando' || pez.fase === 'picando');
@@ -1223,6 +1437,8 @@ function cuadro(ms) {
     if (txt !== distMostrada) { distMostrada = txt; elDist.innerHTML = txt + '<small>m</small>'; }
   }
   if (avisoT > 0) { avisoT -= dt; if (avisoT <= 0) elAviso.classList.remove('visible'); }
+  // tiempo sin jugar con la boya en el agua (más de 10 s sin tocar nada): para no leer una boya abandonada como mordidas perdidas
+  if (conLinea() && performance.now() - ultimoInput > 10000) inactivo += dt;
   if (estado === 'cargando') {
     elRelleno.style.width = (carga * 100) + '%';
     const lleno = tCarga >= T_CARGA; elBarra.classList.toggle('lleno', lleno);
@@ -1239,8 +1455,8 @@ function cuadro(ms) {
 }
 
 const hot = window.claude && window.claude.hot;
-if (hot && hot.snapshot) hot.snapshot(() => ({ mejor, capturas }));
-const arrancar = (data) => { mejor = (data && data.mejor) || 0; capturas = (data && data.capturas) || 0; pintarLectura(false); requestAnimationFrame((ms) => { tPrev = ms; cuadro(ms); }); };
+if (hot && hot.snapshot) hot.snapshot(() => ({ mejor, capturas, pesoMax }));
+const arrancar = (data) => { mejor = (data && data.mejor) || 0; capturas = (data && data.capturas) || 0; pesoMax = (data && data.pesoMax) || 0; pintarLectura(false); requestAnimationFrame((ms) => { tPrev = ms; cuadro(ms); }); };
 if (hot && hot.ready) hot.ready(arrancar); else arrancar((hot && hot.data) || {});
 })();
 </script>
