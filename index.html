@@ -56,6 +56,16 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
 .ayuda kbd{font:inherit;font-weight:600;color:var(--ambar)}
 .ayuda .ojo{color:var(--celeste);font-weight:600}
 .fin{width:min(340px,calc(100% - 32px))}
+.panel.nombre{top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(340px,calc(100% - 32px))}
+.panel input[type=text]{width:100%;box-sizing:border-box;background:rgba(13,10,36,.6);color:var(--tinta);border:1px solid var(--borde);border-radius:3px;padding:9px;font:15px var(--f-texto)}
+.ranking{width:min(340px,calc(100% - 32px))}
+.tabla{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px;font-size:13px;counter-reset:pos}
+.tabla li{display:grid;grid-template-columns:1.6em 1fr auto;column-gap:8px;align-items:baseline;padding:4px 6px;border-radius:2px}
+.tabla li::before{counter-increment:pos;content:counter(pos);color:var(--bruma);font-family:var(--f-display)}
+.tabla li.vacio::before{content:none}
+.tabla li.yo{background:rgba(255,181,71,.12);color:var(--ambar)}
+.tabla .kg{font-family:var(--f-display);font-size:15px;font-variant-numeric:tabular-nums}
+.tabla .cual{grid-column:2 / 4;font-size:11px;color:var(--bruma)}
 .resumen{margin:0;display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:13px;align-items:baseline}
 .resumen dt{color:var(--bruma)}
 .resumen dd{margin:0;font-family:var(--f-display);font-size:16px;font-variant-numeric:tabular-nums;text-align:right}
@@ -114,6 +124,7 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
     <div class="botones">
       <button id="btnSonido" type="button" aria-pressed="true">Sonido: sí</button>
       <button id="btnAyuda" type="button" aria-expanded="false" aria-controls="panelAyuda">Cómo jugar</button>
+      <button id="btnRanking" type="button" aria-expanded="false" aria-controls="panelRanking" hidden>Ranking</button>
       <button id="btnTerminar" type="button" aria-expanded="false" aria-controls="panelFin" hidden>Terminar</button>
       <button id="btnCamara" type="button" aria-expanded="false" aria-controls="panelCamara">Cámara</button>
     </div>
@@ -130,6 +141,21 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
     <p class="fuente">Sin pez, <kbd>mantené click derecho</kbd> para recoger la boya. En el celular: tocá para lanzar, arrastrá para tirar y usá los botones Cobrar y Soltar.</p>
     <p class="fuente solo-prueba" hidden>Esta prueba anota cómo jugás (lances, piques, peleas y tiempos), sin datos personales, para ajustar el juego. Cuando quieras, «Terminar» te muestra tu resumen.</p>
     <div class="fila"><button id="btnEntendido" type="button">Entendido</button></div>
+  </section>
+  <section class="panel nombre" id="panelNombre" hidden aria-label="Tu nombre">
+    <h2>Antes de pescar</h2>
+    <label class="pregunta" for="inNombre">¿Con qué nombre querés aparecer en el ranking?
+      <input id="inNombre" type="text" maxlength="16" autocomplete="nickname" placeholder="Tu nombre">
+    </label>
+    <p class="fuente">Queda guardado en este navegador. Lo podés cambiar desde el ranking.</p>
+    <div class="fila"><button id="btnNombre" type="button">Jugar</button></div>
+  </section>
+  <section class="panel ranking" id="panelRanking" hidden aria-label="Ranking de pesos">
+    <h2>Ranking de pesos</h2>
+    <p class="fuente">El pez más pesado de cada jugador. Se actualiza solo cuando alguien saca uno.</p>
+    <ol class="tabla" id="listaRanking"></ol>
+    <p class="fuente" id="miRanking"></p>
+    <div class="fila"><button id="btnCambiarNombre" type="button">Cambiar nombre</button></div>
   </section>
   <section class="panel fin" id="panelFin" hidden aria-label="Terminar la prueba">
     <h2>Gracias por probar</h2>
@@ -183,8 +209,12 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
 try {
   firebase.initializeApp({"apiKey": "AIzaSyArdnHi15ESd0MBuPRIIK9u9FKOQp0qDtE", "authDomain": "sararia-8f3cd.firebaseapp.com", "projectId": "sararia-8f3cd", "storageBucket": "sararia-8f3cd.firebasestorage.app", "messagingSenderId": "61731645175", "appId": "1:61731645175:web:2b6ae5f616f44fa02095f2"});
   const fs = firebase.firestore();
-  window.__guardarPartida = (id, datos) => fs.collection('partidas').doc(id)
-    .set(Object.assign({}, datos, { guardado: firebase.firestore.FieldValue.serverTimestamp() }));
+  const conHora = (datos) => Object.assign({}, datos, { guardado: firebase.firestore.FieldValue.serverTimestamp() });
+  window.__guardarPartida = (id, datos) => fs.collection('partidas').doc(id).set(conHora(datos));
+  // el ranking global: el pez más pesado de cada jugador (ranking/<jugador>), y una escucha en vivo de los primeros
+  window.__guardarRanking = (id, datos) => fs.collection('ranking').doc(id).set(conHora(datos));
+  window.__escucharRanking = (cb) => fs.collection('ranking').orderBy('pesoMax', 'desc').limit(15)
+    .onSnapshot((s) => cb(s.docs.map((d) => d.data())), () => cb(null));
 } catch (e) { console.warn('Sin conexión a Firestore:', e); }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -249,7 +279,7 @@ const SUSTO = 0.35;                       // tensión que asusta a un pez que se
 // Tensión = lo que tira el pez (entero si aguantás la caña, 55 % si la dejás bajar y el freno da sedal)
 //         + 0,3 si cobrás + lo que sumen los bombeos. Pasar T_ROTURA más de T_CORTE corta; quedar bajo T_FLOJA 2,5 s, se suelta.
 const T_ROTURA = 1.35, T_FLOJA = 0.2;
-const T_CORTE = 0.5;                      // segundos en rojo antes de cortar: el sedal cruje, cada vez más seguido
+const T_CORTE = 0.9;                      // segundos en rojo antes de cortar: el sedal cruje, cada vez más seguido (ronda 2: 0,5 no alcanzaba para reaccionar)
 const IGNORAR_TIRON_CLAVAR = 450;         // ms: lo que sigue del tirón con que clavaste no cuenta como tirada contra el pez
 const VEL_COBRO = 3.0;                    // m/s que cobrás mientras el pez cede
 const VEL_RECOGER = 7.0;                  // m/s que recogés la boya sin pez
@@ -491,16 +521,20 @@ const pezColgado = new THREE.Group(); pezColgado.visible = false; escena.add(pez
    La sombra dice el tamaño, y lejos del muelle hay más chances de grandes: elegir dónde tirar es parte del juego.
    Pica el pez más cercano a la boya (dentro de R_ATRAE), antes cuanto más cerca; una boya que cae encima lo espanta.
    Las especies son nombres de trabajo por su manera de pelear, no nombres del mundo de Sararia. */
+// Ronda 3: la fuerza es relativa y topa en 1 (por el tirador grande); con el sacudón, un pez solo nunca pasa ~1,1,
+// por debajo del límite de 1,35. Lo que corta es lo que suma el jugador (aguantar + cobrar + tirar). Los grandes se
+// distinguen por cuánto aguantan (más energía, peleas más largas), no por cortar solos: en la ronda 2, con fuerza
+// hasta 1,5, los 7 cortes del primer segundo y medio fueron todos de peces grandes.
 const ESPECIES = {
-  corredor: { nombre: 'corredor', fuerza: 0.85, aguante: 0.8, corrida: [0.8, 1.5], lados: [-1, 1, -1, 1, 0], picadas: [2, 3], ventana: 0.75, acerca: 2.6, nada: 0.9, kg: 0.8, salta: 0 },
-  tirador: { nombre: 'tirador', fuerza: 1.05, aguante: 1.35, corrida: [2.2, 3.8], lados: [0, 0, 0, -1, 1], picadas: [0, 1], ventana: 1.1, acerca: 1.4, nada: 0.45, kg: 1.4, salta: 0 },
-  saltador: { nombre: 'saltador', fuerza: 1.0, aguante: 1.0, corrida: [1.2, 2.4], lados: [-1, 0, 1], picadas: [1, 2], ventana: 0.9, acerca: 2.0, nada: 0.7, kg: 1.0, salta: 0.45 }
+  corredor: { nombre: 'corredor', fuerza: 0.9, aguante: 0.8, corrida: [0.8, 1.5], lados: [-1, 1, -1, 1, 0], picadas: [2, 3], ventana: 0.75, acerca: 2.6, nada: 0.9, kg: 0.8, salta: 0 },
+  tirador: { nombre: 'tirador', fuerza: 1.0, aguante: 1.35, corrida: [2.2, 3.8], lados: [0, 0, 0, -1, 1], picadas: [0, 1], ventana: 1.1, acerca: 1.4, nada: 0.45, kg: 1.4, salta: 0 },
+  saltador: { nombre: 'saltador', fuerza: 0.95, aguante: 1.0, corrida: [1.2, 2.4], lados: [-1, 0, 1], picadas: [1, 2], ventana: 0.9, acerca: 2.0, nada: 0.7, kg: 1.0, salta: 0.45 }
 };
 const TAMANOS = {
   // la sombra va más grande que el pez: vista casi de canto desde el muelle, una forma plana se achica mucho
-  chico: { k: 0.8, sombra: 1.0, escala: 0.8, kg: [0.3, 0.8] },
-  mediano: { k: 1.0, sombra: 1.6, escala: 1.0, kg: [1.0, 2.4] },
-  grande: { k: 1.15, sombra: 2.6, escala: 1.4, kg: [3.0, 6.0] }
+  chico: { k: 0.75, aguante: 0.8, sombra: 1.0, escala: 0.8, kg: [0.3, 0.8] },
+  mediano: { k: 0.9, aguante: 1.0, sombra: 1.6, escala: 1.0, kg: [1.0, 2.4] },
+  grande: { k: 1.0, aguante: 1.3, sombra: 2.6, escala: 1.4, kg: [3.0, 6.0] }
 };
 const N_PECES = 10, R_ATRAE = 8, R_ESPANTA = 1.4;
 const cardumen = [];
@@ -679,7 +713,7 @@ const tactil = window.matchMedia && matchMedia('(pointer: coarse)').matches;
    (window.__guardarPartida) la agrega sólo esa versión, así que acá guardarMed() no hace nada.
    Se guarda en momentos con sentido: el primer lance, cada 5 lances, cada pelea terminada, al terminar y al irse. */
 const MODO_PRUEBA = (document.querySelector('meta[name="pesca:modo"]') || {}).content === 'prueba';
-const VERSION_JUEGO = '2026-10-25c';     // se ve junto al título: cambiarla en cada publicación
+const VERSION_JUEGO = '2026-10-25d';     // se ve junto al título: cambiarla en cada publicación
 const r1 = (x) => Math.round(x * 10) / 10;
 const med = {
   sesion: Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
@@ -688,7 +722,7 @@ const med = {
   segundos: 0, primerLanceSeg: null, ayudaAbierta: false,
   lances: 0, distancias: [], peces: 0, asustados: 0, mordidas: 0, seFueron: 0, enganchados: 0,
   reaccionMs: [], peleas: [], capturas: 0, diversion: null, comentario: '', terminada: false, estadoAlGuardar: '',
-  avisosQ: 0, inactivoSeg: 0, pesoMax: 0, lancesCerca: 0
+  avisosQ: 0, inactivoSeg: 0, pesoMax: 0, lancesCerca: 0, jugador: '', nombre: ''
 };
 let peleaMed = null, guardando = false, guardarDeNuevo = false, tMordida = 0, soltandoAntes = false;
 async function guardarMed() {
@@ -798,7 +832,9 @@ function tirarDelPez(dx, dy, dts) {
   const v = Math.min(6, largo / dts), c = contraCorrida();
   const a = dx * c.x + dy * c.y, cruzado = Math.abs(dx * c.y - dy * c.x);
   const bueno = Math.max(0, a), malo = Math.max(0, -a) + 0.6 * cruzado;
-  pico = Math.min(T_MAX, pico + GANANCIA * v * (bueno * 0.35 + malo * 0.9));
+  // Ronda 3: en la dirección correcta, la velocidad deja de multiplicar pasado 2 pantallas/s (en la ronda 2 los
+  // tirones rápidos y bien dirigidos igual cortaban); en la equivocada, sigue castigando entera.
+  pico = Math.min(T_MAX, pico + GANANCIA * (Math.min(v, 2) * bueno * 0.25 + v * malo * 0.9));
   if (peleaMed) { peleaMed.bien += bueno; peleaMed.mal += malo; }
   const P = pelea.p, rx = pj.position.x - P.x, rz = pj.position.z - P.z, dist = Math.hypot(rx, rz);
   const paso = bueno * METROS_POR_PANTALLA * (pelea.modo === 'cede' ? 1.2 : 0.8);
@@ -818,7 +854,7 @@ function pelear(dt, t) {
   }
   const tira = pelea.modo === 'tira', aguanta = !!gesto;
   // la fuerza depende de la especie y el tamaño (k), baja con el cansancio, y la corrida viene a sacudones
-  const fuerza = (0.6 + 0.5 * pelea.energia) * pelea.k * (1 + 0.15 * Math.sin(t * 5));
+  const fuerza = (0.55 + 0.45 * pelea.energia) * pelea.k * (1 + 0.1 * Math.sin(t * 5));   // máximo ~1,1
   pelea.fuerza = fuerza;
   // el saltador sale del agua y sacude la cabeza mientras corre
   if (tira && esp.salta && pez.salto < 0 && azar() < esp.salta * dt) saltar();
@@ -935,7 +971,7 @@ function enganchar() {
   // arranca corriendo, con un respiro de 0,8 s antes de que la tensión pueda cortar; la fuerza (k) y el aguante salen de especie y tamaño
   pelea = { p: new THREE.Vector3(enAgua.x, 0, enAgua.z), energia: 1, modo: 'tira', modoT: lerp(esp.corrida[0], esp.corrida[1], azar()) + 0.6, lado: elegirLado(null, esp.lados),
     carga: 0.6, tRotura: 0, tFloja: 0, gracia: 0.8, vx: 0, vz: 0, ignorarHasta: performance.now() + IGNORAR_TIRON_CLAVAR, tCruje: 0, avisoQ: false, fuerza: 1,
-    esp, k: esp.fuerza * T.k, aguante: esp.aguante * T.k };
+    esp, k: esp.fuerza * T.k, aguante: esp.aguante * T.aguante };
   aviso('¡Enganchado!', 'fijo');
   sonEnganche(); chapotear(se.p.x, se.p.z);
 }
@@ -950,7 +986,15 @@ function capturar() {
   if (pez.kg > pesoMax) pesoMax = pez.kg;
   med.pesoMax = r1(pesoMax);
   pintarLectura(false);
-  aviso(`Capturado · ${pez.especie ? pez.especie.nombre : 'pez'} ${pez.tamano} · ${fmt(pez.kg)} kg`, null, 3);
+  const especie = pez.especie ? pez.especie.nombre : 'pez', kg = r1(pez.kg), cual = `${especie} ${pez.tamano} · ${fmt(kg)} kg`;
+  let texto = 'Capturado · ' + cual;
+  if (kg > mejorKgHistorico) {   // récord personal: sube al ranking (y si supera al primero, es récord del ranking)
+    const lider = rankingTop[0], esLider = !!window.__escucharRanking && (!lider || kg > lider.pesoMax);
+    mejorKgHistorico = kg; anotar('pesca.mejorKg', String(kg)); anotar('pesca.mejorEspecie', especie); anotar('pesca.mejorTamano', pez.tamano);
+    subirRecord(kg, especie, pez.tamano);
+    texto = (esLider ? '¡Récord del ranking! · ' : 'Récord personal · ') + cual;
+  }
+  aviso(texto, null, 3.2);
   sonCaptura(); finPelea('capturado');
 }
 function aviso(texto, tipo, segundos) {
@@ -1151,9 +1195,9 @@ function pintarLectura(record) {
 
 /* ——— Panel de cámara ——— */
 const btnCamara = $('#btnCamara'), panel = $('#panelCamara'), btnAyuda = $('#btnAyuda'), panelAyuda = $('#panelAyuda');
-const btnTerminar = $('#btnTerminar'), panelFin = $('#panelFin');
+const btnTerminar = $('#btnTerminar'), panelFin = $('#panelFin'), btnRanking = $('#btnRanking'), panelRanking = $('#panelRanking'), panelNombre = $('#panelNombre');
 // los paneles comparten el lugar: abrir uno cierra los otros
-const botonDe = new Map([[panel, btnCamara], [panelAyuda, btnAyuda], [panelFin, btnTerminar]]);
+const botonDe = new Map([[panel, btnCamara], [panelAyuda, btnAyuda], [panelFin, btnTerminar], [panelRanking, btnRanking]]);
 function mostrarPanel(p, ver) {
   p.hidden = !ver;
   botonDe.get(p).setAttribute('aria-expanded', String(ver));
@@ -1165,13 +1209,14 @@ function mostrarPanel(p, ver) {
 btnCamara.addEventListener('click', () => mostrarPanel(panel, panel.hidden));
 btnAyuda.addEventListener('click', () => mostrarPanel(panelAyuda, panelAyuda.hidden));
 btnTerminar.addEventListener('click', () => mostrarPanel(panelFin, panelFin.hidden));
+btnRanking.addEventListener('click', () => mostrarPanel(panelRanking, panelRanking.hidden));
 $('#btnEntendido').addEventListener('click', () => mostrarPanel(panelAyuda, false));
 $('#btnSeguir').addEventListener('click', () => mostrarPanel(panelFin, false));
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const p of botonDe.keys()) if (!p.hidden) mostrarPanel(p, false); });
 
 /* ——— Modo prueba: sin panel de cámara, con aviso de qué se mide y un final con resumen y opinión ——— */
 if (MODO_PRUEBA) {
-  btnCamara.hidden = true; btnTerminar.hidden = false;
+  btnCamara.hidden = true; btnTerminar.hidden = false; btnRanking.hidden = false;
   for (const el of document.querySelectorAll('.solo-prueba')) el.hidden = false;
 }
 let nota = null;
@@ -1199,7 +1244,72 @@ $('#btnEnviar').addEventListener('click', async () => {
   await guardarMed();
   $('#estadoEnvio').textContent = '¡Gracias! Quedó guardado. Podés seguir jugando.';
 });
-{ let vista = false; try { vista = localStorage.getItem('pesca.ayudaVista') === '1'; } catch (e) { /* sin almacenamiento */ } if (!vista) mostrarPanel(panelAyuda, true); }
+/* ——— El jugador: un nombre para el ranking y un id al azar, guardados en este navegador ———
+   No se usa la IP: no identifica mejor que el navegador (una casa la comparte, un celular la cambia), habría que
+   mandarla a un servicio de terceros para leerla, y es un dato personal que el juego no necesita. */
+const leer = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const anotar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento: dura esta visita */ } };
+const jugadorId = leer('pesca.jugador') || ('j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+anotar('pesca.jugador', jugadorId);
+let nombreJugador = leer('pesca.nombre') || '';
+let mejorKgHistorico = Number(leer('pesca.mejorKg')) || 0;   // el mejor pez de este jugador, de todas sus sesiones
+med.jugador = jugadorId; med.nombre = nombreJugador;
+const ayudaVista = leer('pesca.ayudaVista') === '1';
+function pedirNombre() {
+  $('#inNombre').value = nombreJugador; panelNombre.hidden = false;
+  setTimeout(() => $('#inNombre').focus(), 50);
+}
+function confirmarNombre() {
+  const primeraVez = !nombreJugador;
+  nombreJugador = $('#inNombre').value.trim().replace(/\s+/g, ' ').slice(0, 16) || 'Anónimo';
+  anotar('pesca.nombre', nombreJugador); med.nombre = nombreJugador;
+  panelNombre.hidden = true;
+  if (mejorKgHistorico > 0) subirRecord(mejorKgHistorico, leer('pesca.mejorEspecie') || '', leer('pesca.mejorTamano') || '');   // el ranking toma el nombre nuevo
+  pintarRanking();
+  if (primeraVez && !ayudaVista) mostrarPanel(panelAyuda, true);
+}
+$('#btnNombre').addEventListener('click', confirmarNombre);
+$('#inNombre').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmarNombre(); });
+$('#btnCambiarNombre').addEventListener('click', () => { mostrarPanel(panelRanking, false); pedirNombre(); });
+
+/* ——— El ranking global: el pez más pesado de cada jugador, en vivo ———
+   La conexión (window.__escucharRanking / __guardarRanking) la pone sólo la versión web. Las reglas aceptan pesos
+   posibles (hasta 9 kg) y sólo mejoras; es entre amigos: no está blindado contra quien sepa falsearlo. */
+let rankingTop = [];
+function pintarRanking() {
+  const ol = $('#listaRanking'); ol.textContent = '';
+  if (!window.__escucharRanking) { const li = document.createElement('li'); li.className = 'vacio'; li.textContent = 'El ranking está en la versión web.'; ol.appendChild(li); }
+  else if (!rankingTop.length) { const li = document.createElement('li'); li.className = 'vacio'; li.textContent = 'Todavía no hay pesos: el primero puede ser tuyo.'; ol.appendChild(li); }
+  rankingTop.slice(0, 10).forEach((r) => {
+    const li = document.createElement('li'); if (r.jugador === jugadorId) li.className = 'yo';
+    const n = document.createElement('span'), kg = document.createElement('span'), cual = document.createElement('span');
+    n.textContent = r.nombre; kg.className = 'kg'; kg.textContent = fmt(r.pesoMax) + ' kg';
+    cual.className = 'cual'; cual.textContent = [r.especie, r.tamano].filter(Boolean).join(' ');
+    li.append(n, kg, cual); ol.appendChild(li);
+  });
+  const puesto = rankingTop.findIndex((r) => r.jugador === jugadorId) + 1;
+  $('#miRanking').textContent = (nombreJugador ? nombreJugador + ': ' : '') +
+    (mejorKgHistorico ? `tu mejor pez pesó ${fmt(mejorKgHistorico)} kg` + (puesto ? `, puesto ${puesto}` : '') : 'todavía no sacaste ninguno');
+}
+function subirRecord(kg, especie, tamano) {
+  if (!window.__guardarRanking) return;
+  window.__guardarRanking(jugadorId, { jugador: jugadorId, nombre: nombreJugador || 'Anónimo', pesoMax: r1(kg), especie, tamano, version: VERSION_JUEGO })
+    .catch(() => { /* rechazado (p. ej. un peso menor al que ya figura): el ranking se queda como estaba */ });
+}
+if (MODO_PRUEBA && window.__escucharRanking) {
+  window.__escucharRanking((lista) => {
+    if (!lista) return;
+    rankingTop = lista.filter((r) => !/^PRUEBA/.test(r.nombre || ''));   // las entradas de verificación no se muestran
+    const mio = rankingTop.find((r) => r.jugador === jugadorId);
+    if (mio && mio.pesoMax > mejorKgHistorico) { mejorKgHistorico = mio.pesoMax; anotar('pesca.mejorKg', String(mejorKgHistorico)); }
+    pintarRanking();
+  });
+}
+pintarRanking();
+
+// al entrar: en la prueba, primero el nombre (la primera vez) y después el instructivo
+if (MODO_PRUEBA && !nombreJugador) pedirNombre();
+else if (!ayudaVista) mostrarPanel(panelAyuda, true);
 const salidas = {}, entradas = {}, tocada = { reposo: false, carga: false };
 for (const p of PERILLAS) {
   const fila = document.createElement('div'); fila.className = 'perilla';
