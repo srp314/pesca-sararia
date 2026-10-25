@@ -202,12 +202,12 @@ if (!window.THREE) { $('#pista').textContent = 'No cargó three.js: revisá la c
 // En reposo, la cámara normal; mientras se carga, la del hombro. El mismo patrón que el arco: entra al tensar y vuelve al soltar.
 const CAMARAS = {
   reposo: {
-    nombre: 'En reposo', brazo: 400, lateral: 0, alto: 0, pitch: -30, fov: 90, pivote: 98,
-    fuente: 'La cámara normal: CameraBoom de BP_Player, leído el 2026-09-02, 400 cm y centrada. Inclinación: la intención de diseño (30–45°), no un número leído; en el juego la mueve el mouse. FOV: el de fábrica de Unreal, sin verificar en el objeto. Pivote: 8,5 cm sobre el centro de la cápsula (98 cm del suelo).'
+    nombre: 'En reposo', brazo: 400, lateral: 0, alto: 0, pitch: -30, fov: 78, pivote: 98,
+    fuente: 'La cámara normal: CameraBoom de BP_Player, leído el 2026-09-02, 400 cm y centrada. Inclinación: la intención de diseño (30–45°), no un número leído; en el juego la mueve el mouse. FOV vertical 78°: el encuadre con el que se ajustó el prototipo (el 90 de fábrica de Unreal, sin verificar en el objeto, da 59° vertical en 16:9). Pivote: 8,5 cm sobre el centro de la cápsula (98 cm del suelo).'
   },
   carga: {
-    nombre: 'Cargando', brazo: 160, lateral: 55, alto: 60, pitch: -15, fov: 75, pivote: 98,
-    fuente: 'La cámara al hombro del arco: brazo 160, hombro derecho (+55, +60) y FOV 75, defaults de C++ en SarasaCharacter.h. Entra al cargar y vuelve al soltar con FInterpTo a rapidez 12 (~0,25 s), como el arco. La inclinación no está medida en el juego: es perilla.'
+    nombre: 'Cargando', brazo: 160, lateral: 55, alto: 60, pitch: -15, fov: 64, pivote: 98,
+    fuente: 'La cámara al hombro del arco: brazo 160 y hombro derecho (+55, +60), defaults de C++ en SarasaCharacter.h; su FOV 75 de Unreal pasado a 64° vertical, en la misma proporción que la cámara normal. Entra al cargar y vuelve al soltar con FInterpTo a rapidez 12 (~0,25 s), como el arco. La inclinación no está medida en el juego: es perilla.'
   }
 };
 const PERILLAS = [
@@ -215,7 +215,7 @@ const PERILLAS = [
   { k: 'lateral', nombre: 'Corrimiento al hombro', min: -120, max: 150, step: 5, u: ' cm' },
   { k: 'alto', nombre: 'Corrimiento hacia arriba', min: -50, max: 250, step: 5, u: ' cm' },
   { k: 'pitch', nombre: 'Inclinación', min: -60, max: 10, step: 1, u: '°' },
-  { k: 'fov', nombre: 'FOV horizontal', min: 50, max: 120, step: 1, u: '°' },
+  { k: 'fov', nombre: 'FOV vertical', min: 35, max: 100, step: 1, u: '°' },
   { k: 'pivote', nombre: 'Altura del pivote', min: 40, max: 200, step: 1, u: ' cm' }
 ];
 const camCfg = { reposo: { ...CAMARAS.reposo }, carga: { ...CAMARAS.carga } };   // lo que piden las perillas
@@ -1043,8 +1043,9 @@ function colocarCamara(dt) {
   camara.position.copy(_piv).addScaledVector(_f, -camVivo.brazo / 100).addScaledVector(_r, camVivo.lateral / 100).addScaledVector(_u, camVivo.alto / 100);
   camara.lookAt(_v.copy(camara.position).add(_f));
   golpeFov *= Math.exp(-dt * 5);
-  const vfov = 2 * Math.atan(Math.tan(rad(camVivo.fov + golpeFov) / 2) / camara.aspect) * 180 / Math.PI;
-  camara.fov = Math.min(vfov, 78); camara.updateProjectionMatrix();
+  // La vista VERTICAL es fija: todas las pantallas encuadran igual de arriba a abajo, y una ancha ve más a los
+  // costados. Con la horizontal fija (lo de fábrica en Unreal) una pantalla ancha perdía el cielo y el horizonte.
+  camara.fov = camVivo.fov + golpeFov; camara.updateProjectionMatrix();
   boveda.position.copy(camara.position);
 }
 
