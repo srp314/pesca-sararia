@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="pesca:modo" content="prueba">
+<title>Pesca en Sararia</title>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700&family=Marcellus&display=swap">
+<style>
+/* Una sola capa de juego: el lago a pantalla completa; el HUD flota encima — marca y botones arriba, lectura del lance abajo al centro. */
+:root{
+  --noche:#0d0a24;
+  --tinta:#efe9ff;
+  --bruma:#b3a6ee;
+  --violeta:#7b5cff;
+  --celeste:#7fd3ff;
+  --ambar:#ffb547;
+  --peligro:#ff6b81;
+  --vidrio:rgba(16,11,44,.62);
+  --borde:rgba(179,166,238,.28);
+  --f-display:"Marcellus","Palatino Linotype","Book Antiqua",Georgia,serif;
+  --f-texto:"Karla","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--noche);color:var(--tinta);font-family:var(--f-texto);overflow:hidden;-webkit-user-select:none;user-select:none}
+#lago{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
+.hud{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:calc(14px + env(safe-area-inset-top,0px)) calc(18px + env(safe-area-inset-bottom,0px))}
+.arriba{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.marca{display:flex;flex-direction:column;gap:3px;text-shadow:0 1px 12px rgba(10,6,30,.8)}
+.marca b{font-family:var(--f-display);font-weight:400;font-size:26px;letter-spacing:.04em}
+.marca span{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--bruma)}
+.botones{display:flex;gap:8px;pointer-events:auto}
+button{font:600 11px/1 var(--f-texto);letter-spacing:.14em;text-transform:uppercase;color:var(--tinta);background:var(--vidrio);
+  border:1px solid var(--borde);padding:9px 12px;border-radius:3px;cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+button:hover{border-color:var(--bruma)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--celeste);outline-offset:2px}
+button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var(--celeste);color:var(--celeste)}
+.panel{position:absolute;top:calc(60px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));
+  width:min(310px,calc(100% - 32px));max-height:calc(100% - 200px);overflow-y:auto;pointer-events:auto;
+  background:var(--vidrio);border:1px solid var(--borde);border-radius:3px;padding:14px;
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;flex-direction:column;gap:12px;
+  -webkit-user-select:text;user-select:text}
+.panel h2{margin:0;font:400 18px var(--f-display);letter-spacing:.03em}
+.ayuda{width:min(360px,calc(100% - 32px))}
+.ayuda ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.45}
+.ayuda li::marker{font-family:var(--f-display);color:var(--bruma)}
+.ayuda b{font-family:var(--f-display);font-weight:400;font-size:15px;letter-spacing:.02em}
+.ayuda kbd{font:inherit;font-weight:600;color:var(--ambar)}
+.ayuda .ojo{color:var(--celeste);font-weight:600}
+.fin{width:min(340px,calc(100% - 32px))}
+.resumen{margin:0;display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:13px;align-items:baseline}
+.resumen dt{color:var(--bruma)}
+.resumen dd{margin:0;font-family:var(--f-display);font-size:16px;font-variant-numeric:tabular-nums;text-align:right}
+.pregunta{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.notas button{min-width:40px}
+.notas button[aria-pressed="true"]{border-color:var(--ambar);color:var(--ambar)}
+.fin textarea{width:100%;box-sizing:border-box;background:rgba(13,10,36,.6);color:var(--tinta);border:1px solid var(--borde);border-radius:3px;padding:8px;font:13px/1.4 var(--f-texto);resize:vertical}
+.fuente{margin:0;font-size:11px;color:var(--bruma);line-height:1.45}
+.fila{display:flex;gap:8px;flex-wrap:wrap}
+#perillas{display:flex;flex-direction:column;gap:10px}
+.perilla{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;font-size:12px}
+.perilla output{font-variant-numeric:tabular-nums;color:var(--celeste)}
+.perilla input{grid-column:1/-1;width:100%;margin:0;accent-color:var(--violeta)}
+.abajo{display:flex;flex-direction:column;align-items:center;gap:9px;text-shadow:0 1px 14px rgba(10,6,30,.85)}
+.lectura{display:flex;align-items:baseline;gap:18px}
+.dist{font-family:var(--f-display);font-size:clamp(40px,8vw,64px);line-height:1;font-variant-numeric:tabular-nums;transition:color .5s}
+.dist small{font-size:.38em;margin-left:5px;color:var(--bruma)}
+.dist.nuevo{color:var(--ambar)}
+.mejor{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--bruma)}
+.mejor b{font-family:var(--f-display);font-weight:400;font-size:18px;letter-spacing:.02em;color:var(--tinta);margin-left:7px}
+.barra{position:relative;width:min(440px,100%);height:7px;background:rgba(179,166,238,.16);border:1px solid var(--borde);border-radius:1px}
+.relleno{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,var(--celeste),var(--violeta) 55%,var(--ambar))}
+.barra.lleno .relleno{animation:latido .16s ease-in-out infinite alternate}
+.tic{position:absolute;top:0;bottom:0;width:1px;background:rgba(239,233,255,.35)}
+.fantasma{position:absolute;top:-5px;bottom:-5px;width:2px;margin-left:-1px;background:var(--tinta);left:0}
+.marcas{position:relative;width:min(440px,100%);height:13px;font-size:10px;color:var(--bruma);letter-spacing:.06em}
+.marcas span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.pista{font-size:12px;letter-spacing:.14em;text-transform:uppercase;min-height:1.3em;text-align:center}
+.pista kbd{font:inherit;color:var(--ambar)}
+.aviso{font-family:var(--f-display);font-size:clamp(22px,4vw,30px);letter-spacing:.04em;color:var(--ambar);min-height:1.25em;opacity:0;transform:translateY(6px);transition:opacity .25s,transform .25s}
+.aviso.visible{opacity:1;transform:none}
+.aviso.frio{color:var(--bruma)}
+.medidor{display:flex;flex-direction:column;align-items:center;gap:9px;width:min(440px,100%)}
+.cerca{min-height:1.3em;font-size:12px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--celeste);visibility:hidden}
+.cerca.visible{visibility:visible;animation:parpadeo .7s ease-in-out infinite alternate}
+.barra.alerta .relleno{background:var(--peligro)}
+.relleno.tension{background:linear-gradient(90deg,var(--celeste),var(--tinta))}
+.barra.clavado .relleno{background:var(--ambar)}
+.tic.umbral{width:2px;margin-left:-1px;background:var(--ambar)}
+.tic.rotura{width:2px;margin-left:-1px;background:var(--peligro)}
+.barra.peligro .relleno{background:var(--peligro);animation:latido .12s ease-in-out infinite alternate}
+.barra.floja{animation:parpadeo .4s ease-in-out infinite alternate}
+@keyframes parpadeo{from{opacity:1}to{opacity:.35}}
+.cobrar{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(130px + env(safe-area-inset-bottom,0px));
+  pointer-events:auto;padding:18px 22px;font-size:13px;touch-action:none}
+.soltar{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
+.flecha{position:fixed;left:0;top:0;color:var(--ambar);filter:drop-shadow(0 0 6px rgba(255,181,71,.7));pointer-events:none;will-change:transform}
+@keyframes latido{from{filter:brightness(1)}to{filter:brightness(1.7)}}
+@media (prefers-reduced-motion:reduce){.barra.lleno .relleno,.barra.peligro .relleno,.barra.floja,.cerca.visible{animation:none}.dist,.aviso{transition:none}}
+</style>
+
+<canvas id="lago" aria-label="Lago con el personaje de espaldas en la punta del muelle"></canvas>
+<div class="hud">
+  <header class="arriba">
+    <div class="marca"><b>Pesca</b><span>Sararia · prototipo del lance</span></div>
+    <div class="botones">
+      <button id="btnSonido" type="button" aria-pressed="true">Sonido: sí</button>
+      <button id="btnAyuda" type="button" aria-expanded="false" aria-controls="panelAyuda">Cómo jugar</button>
+      <button id="btnTerminar" type="button" aria-expanded="false" aria-controls="panelFin" hidden>Terminar</button>
+      <button id="btnCamara" type="button" aria-expanded="false" aria-controls="panelCamara">Cámara</button>
+    </div>
+  </header>
+  <section class="panel ayuda" id="panelAyuda" hidden aria-label="Cómo jugar">
+    <h2>Cómo jugar</h2>
+    <ol>
+      <li><b>Lanzar.</b> <kbd>Click derecho</kbd> carga la caña y otro click la suelta: cuanto más cargás, más lejos. El mouse apunta.</li>
+      <li><b>Esperar.</b> Con <span class="ojo">Pez cerca</span>, no tires o tirá suave: si la tensión pasa «asusta», se va. Si la boya baja apenas, está picando: todavía no.</li>
+      <li><b>Clavar.</b> Cuando la boya se hunde entera, <kbd>click izquierdo</kbd> y subí el mouse de golpe. Tenés menos de un segundo.</li>
+      <li><b>Pelear.</b> Con flecha, corre: <kbd>click izquierdo</kbd> y tirá el mouse para el lado contrario. Sin flecha, descansa: <kbd>mantené click derecho</kbd> para cobrar. Barra roja: <kbd>mantené Q</kbd> para soltar tensión. Barra floja que titila: cobrá o se suelta. A 3 m es tuyo.</li>
+    </ol>
+    <p class="fuente">Sin pez, <kbd>mantené click derecho</kbd> para recoger la boya. En el celular: tocá para lanzar, arrastrá para tirar y usá los botones Cobrar y Soltar.</p>
+    <p class="fuente solo-prueba" hidden>Esta prueba anota cómo jugás (lances, piques, peleas y tiempos), sin datos personales, para ajustar el juego. Cuando quieras, «Terminar» te muestra tu resumen.</p>
+    <div class="fila"><button id="btnEntendido" type="button">Entendido</button></div>
+  </section>
+  <section class="panel fin" id="panelFin" hidden aria-label="Terminar la prueba">
+    <h2>Gracias por probar</h2>
+    <dl class="resumen" id="resumen"></dl>
+    <div class="pregunta">
+      <span id="lblDiversion">¿Qué tan divertido fue?</span>
+      <div class="fila notas" role="group" aria-labelledby="lblDiversion" id="notas"></div>
+    </div>
+    <label class="pregunta" for="comentario">¿Qué te costó o qué cambiarías?
+      <textarea id="comentario" rows="3" maxlength="1000"></textarea>
+    </label>
+    <p class="fuente" id="estadoEnvio"></p>
+    <div class="fila"><button id="btnEnviar" type="button">Enviar</button><button id="btnSeguir" type="button">Seguir jugando</button></div>
+  </section>
+  <section class="panel" id="panelCamara" hidden aria-label="Ajustes de cámara">
+    <h2>Cámara</h2>
+    <p class="fuente">Cambia sola, como con el arco: la normal en reposo y la del hombro mientras cargás. Elegí cuál ajustar.</p>
+    <div class="fila" id="presets"></div>
+    <p class="fuente" id="fuenteCamara"></p>
+    <div id="perillas"></div>
+    <div class="fila"><button id="btnGdm" type="button">Valores del GDM</button><button id="btnCopiar" type="button">Copiar valores</button></div>
+  </section>
+  <footer class="abajo">
+    <div class="aviso" id="aviso" aria-live="polite"></div>
+    <div class="lectura">
+      <div class="dist" id="dist">—<small>m</small></div>
+      <div class="mejor">Mejor<b id="mejor">—</b></div>
+      <div class="mejor">Peces<b id="peces">0</b></div>
+    </div>
+    <div class="medidor" id="medCarga">
+      <div class="barra" id="barra"><div class="relleno" id="relleno"></div><div class="fantasma" id="fantasma" hidden></div></div>
+      <div class="marcas" id="marcas"></div>
+    </div>
+    <div class="medidor" id="medTension" hidden>
+      <div class="cerca" id="cerca">Pez cerca · tirá suave</div>
+      <div class="barra" id="barraT"><div class="relleno tension" id="rellenoT"></div></div>
+      <div class="marcas" id="marcasT"></div>
+    </div>
+    <div class="pista" id="pista"></div>
+  </footer>
+  <button class="cobrar" id="btnCobrar" type="button" hidden>Cobrar</button>
+  <button class="cobrar soltar" id="btnSoltar" type="button" hidden>Soltar</button>
+  <div class="flecha" id="flecha" hidden aria-hidden="true"><svg viewBox="0 0 48 48" width="48" height="48"><path d="M8 24h26M24 12l12 12-12 12" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// Conexión de la prueba abierta: cada sesión es un documento en partidas/<sesion>. Si Firebase no carga, el juego sigue igual.
+try {
+  firebase.initializeApp({"apiKey": "AIzaSyArdnHi15ESd0MBuPRIIK9u9FKOQp0qDtE", "authDomain": "sararia-8f3cd.firebaseapp.com", "projectId": "sararia-8f3cd", "storageBucket": "sararia-8f3cd.firebasestorage.app", "messagingSenderId": "61731645175", "appId": "1:61731645175:web:2b6ae5f616f44fa02095f2"});
+  const fs = firebase.firestore();
+  window.__guardarPartida = (id, datos) => fs.collection('partidas').doc(id)
+    .set(Object.assign({}, datos, { guardado: firebase.firestore.FieldValue.serverTimestamp() }));
+} catch (e) { console.warn('Sin conexión a Firestore:', e); }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s) => document.querySelector(s);
+const rad = (d) => d * Math.PI / 180;
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const suave = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const fmt = (m) => m.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+if (!window.THREE) { $('#pista').textContent = 'No cargó three.js: revisá la conexión y recargá.'; return; }
+
+/* ——— Cámara: el brazo de cámara de Unreal, en cm y grados (datos del Game Design Master, 2026-10-24) ——— */
+// En reposo, la cámara normal; mientras se carga, la del hombro. El mismo patrón que el arco: entra al tensar y vuelve al soltar.
+const CAMARAS = {
+  reposo: {
+    nombre: 'En reposo', brazo: 400, lateral: 0, alto: 0, pitch: -30, fov: 90, pivote: 98,
+    fuente: 'La cámara normal: CameraBoom de BP_Player, leído el 2026-09-02, 400 cm y centrada. Inclinación: la intención de diseño (30–45°), no un número leído; en el juego la mueve el mouse. FOV: el de fábrica de Unreal, sin verificar en el objeto. Pivote: 8,5 cm sobre el centro de la cápsula (98 cm del suelo).'
+  },
+  carga: {
+    nombre: 'Cargando', brazo: 160, lateral: 55, alto: 60, pitch: -15, fov: 75, pivote: 98,
+    fuente: 'La cámara al hombro del arco: brazo 160, hombro derecho (+55, +60) y FOV 75, defaults de C++ en SarasaCharacter.h. Entra al cargar y vuelve al soltar con FInterpTo a rapidez 12 (~0,25 s), como el arco. La inclinación no está medida en el juego: es perilla.'
+  }
+};
+const PERILLAS = [
+  { k: 'brazo', nombre: 'Largo del brazo', min: 80, max: 900, step: 5, u: ' cm' },
+  { k: 'lateral', nombre: 'Corrimiento al hombro', min: -120, max: 150, step: 5, u: ' cm' },
+  { k: 'alto', nombre: 'Corrimiento hacia arriba', min: -50, max: 250, step: 5, u: ' cm' },
+  { k: 'pitch', nombre: 'Inclinación', min: -60, max: 10, step: 1, u: '°' },
+  { k: 'fov', nombre: 'FOV horizontal', min: 50, max: 120, step: 1, u: '°' },
+  { k: 'pivote', nombre: 'Altura del pivote', min: 40, max: 200, step: 1, u: ' cm' }
+];
+const camCfg = { reposo: { ...CAMARAS.reposo }, carga: { ...CAMARAS.carga } };   // lo que piden las perillas
+const camVivo = { ...CAMARAS.reposo };   // lo que usa la cámara: sigue a la del estado con FInterpTo, rapidez 12
+let camEditada = 'reposo';
+
+/* ——— El lance ——— */
+const R_MIN = 4, R_MAX = 44;             // metros, con carga 0 y con carga 1
+const T_CARGA = 1.25;                    // segundos hasta la carga completa
+const ANG_REPOSO = rad(-55);             // la caña adelante, 35° sobre la horizontal
+const ANG_ATRAS = rad(70);               // la caña sobre el hombro
+const ANG_ADELANTE = rad(-76);           // el fin del latigazo
+const ANG_SUELTA = rad(-18);             // donde se suelta el sedal
+const G = 9.8, L_COLGANTE = 0.55, YAW_MAX = rad(35);
+const PISO_LEJANO = -0.31;
+
+/* ——— El pique: el pez se acerca, pica, muerde; los tirones lo clavan ——— */
+// El tirón es un gesto: click izquierdo sostenido y el mouse hacia arriba, como sube la caña. La tensión que suma cada tramo es
+// GANANCIA × largo × velocidad (en pantallas y pantallas por segundo): un tirón seco clava, uno lento sólo arrima.
+const GANANCIA = 2.2, CAIDA_TENSION = 0.9, UMBRAL = 1.0, T_MAX = 1.5;
+const VENTANA_MORDIDA = 0.9;              // segundos con la boya hundida para clavar
+const RECORRIDO = 0.35;                   // fracción de la pantalla que es un tirón completo
+const ANG_TIRON = rad(45);                // cuánto sube la caña con un tirón completo
+const METROS_POR_PANTALLA = 2.6;          // cuánto se arrima la boya por cada pantalla de tirón
+const SUSTO = 0.35;                       // tensión que asusta a un pez que se acerca o pica
+
+/* ——— La pelea: el pez tira y cede; vos aguantás, cobrás y bombeás ——— */
+// Tensión = lo que tira el pez (entero si aguantás la caña, 55 % si la dejás bajar y el freno da sedal)
+//         + 0,3 si cobrás + lo que sumen los bombeos. Pasar T_ROTURA más de 0,3 s corta; quedar bajo T_FLOJA 2,5 s, se suelta.
+const T_ROTURA = 1.35, T_FLOJA = 0.2;
+const VEL_COBRO = 3.0;                    // m/s que cobrás mientras el pez cede
+const VEL_RECOGER = 7.0;                  // m/s que recogés la boya sin pez
+
+/* ——— Motor ——— */
+const lienzo = $('#lago');
+const renderer = new THREE.WebGLRenderer({ canvas: lienzo, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const escena = new THREE.Scene();
+const BRUMA = new THREE.Color('#7b46c2');
+escena.background = BRUMA;
+escena.fog = new THREE.Fog(BRUMA, 45, 380);
+const camara = new THREE.PerspectiveCamera(60, 1, 0.05, 1500);
+
+let semilla = 11;
+const azar = () => { semilla = semilla + 0x6D2B79F5 | 0; let t = Math.imul(semilla ^ semilla >>> 15, 1 | semilla); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const phong = (color, extra) => new THREE.MeshPhongMaterial(Object.assign({ color, shininess: 6, flatShading: true }, extra || {}));
+function poner(geo, mat, x, y, z, padre) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); (padre || escena).add(m); return m; }
+
+function texturaHalo(color) {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, color); r.addColorStop(0.25, color + 'aa'); r.addColorStop(1, color + '00');
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+
+/* ——— La bóveda: cielo, estrellas, luna. Sigue a la cámara ——— */
+const boveda = new THREE.Group(); escena.add(boveda);
+const cielo = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { cArriba: { value: new THREE.Color('#0f0a33') }, cMedio: { value: new THREE.Color('#3b25a0') }, cHorizonte: { value: BRUMA.clone() } },
+  vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform vec3 cArriba; uniform vec3 cMedio; uniform vec3 cHorizonte; varying vec3 vDir; void main(){ float h = vDir.y; vec3 c = mix(cHorizonte, cMedio, smoothstep(0.0, 0.22, h)); c = mix(c, cArriba, smoothstep(0.22, 0.75, h)); gl_FragColor = vec4(c, 1.0); }'
+}));
+cielo.renderOrder = -10; boveda.add(cielo);
+{
+  const n = 700, p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const y = 0.08 + azar() * 0.92, th = azar() * Math.PI * 2, r = Math.sqrt(1 - y * y); p[i * 3] = r * Math.cos(th) * 850; p[i * 3 + 1] = y * 850; p[i * 3 + 2] = r * Math.sin(th) * 850; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  boveda.add(new THREE.Points(g, new THREE.PointsMaterial({ color: '#e9e0ff', size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.8, depthWrite: false })));
+}
+const dirLuna = new THREE.Vector3(-0.45, 0.3, -1).normalize();
+{
+  const luna = poner(new THREE.CircleGeometry(36, 48), new THREE.MeshBasicMaterial({ color: '#fff0fa', fog: false }), 0, 0, 0, boveda);
+  luna.position.copy(dirLuna).multiplyScalar(820); luna.lookAt(0, 0, 0);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaHalo('#ffc8ee'), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, transparent: true, opacity: 0.5 }));
+  halo.position.copy(luna.position); halo.scale.set(300, 300, 1); boveda.add(halo);
+}
+
+/* ——— Luces ——— */
+escena.add(new THREE.HemisphereLight('#9d8cff', '#1b1145', 0.85));
+const luzLuna = new THREE.DirectionalLight('#ffd6ef', 0.9); luzLuna.position.copy(dirLuna).multiplyScalar(100); escena.add(luzLuna);
+const luzEspalda = new THREE.DirectionalLight('#5f9dff', 0.45); luzEspalda.position.set(10, 30, 60); escena.add(luzEspalda);
+
+/* ——— El agua: una grilla cercana con olas, que en los bordes se hunde hasta el plano lejano ——— */
+function olas(x, z, t) {
+  return 0.09 * Math.sin(0.31 * x + 0.83 * t) + 0.07 * Math.sin(0.43 * z - 1.07 * t + 0.21 * x) + 0.035 * Math.sin(1.25 * (x + 0.7 * z) + 1.9 * t);
+}
+const MAT_AGUA = { color: '#1f1b78', emissive: '#0e0930', specular: '#6458b8', shininess: 140 };
+const aguaGeo = new THREE.PlaneGeometry(200, 200, 100, 100);
+aguaGeo.rotateX(-Math.PI / 2); aguaGeo.translate(0, 0, -80);
+const posA = aguaGeo.attributes.position, bordeA = new Float32Array(posA.count);
+for (let i = 0; i < posA.count; i++) { const x = posA.getX(i), z = posA.getZ(i); bordeA[i] = Math.max(suave(70, 99, Math.abs(x)), suave(-150, -179, z), suave(12, 19.5, z)); }
+escena.add(new THREE.Mesh(aguaGeo, phong(MAT_AGUA.color, MAT_AGUA)));
+const aguaLejos = poner(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshPhongMaterial(MAT_AGUA), 0, PISO_LEJANO, 0);
+aguaLejos.rotation.x = -Math.PI / 2;
+function moverAgua(t) {
+  for (let i = 0; i < posA.count; i++) posA.setY(i, lerp(olas(posA.getX(i), posA.getZ(i), t), PISO_LEJANO, bordeA[i]));
+  posA.needsUpdate = true; aguaGeo.computeVertexNormals();
+}
+
+/* ——— La orilla, el muelle y el farol ——— */
+poner(new THREE.BoxGeometry(160, 1.2, 70), phong('#22184a'), 0, -0.15, 9.6 + 35);
+{
+  const madera = phong('#5b3b5e'), poste = phong('#3b2645');
+  for (let i = 0; i < 14; i++) poner(new THREE.BoxGeometry(2.2, 0.08, 0.64), madera, 0, 0.58, 0.32 + i * 0.7).rotation.y = (azar() - 0.5) * 0.02;
+  for (const z of [0.2, 3.4, 6.6, 9.4]) for (const x of [-1.05, 1.05]) poner(new THREE.CylinderGeometry(0.09, 0.1, 1.7, 6), poste, x, -0.25, z);
+  // el farol queda detrás de la cámara: no tapa el lago y le da al personaje un contraluz cálido
+  const ZF = 6.6;
+  poner(new THREE.CylinderGeometry(0.05, 0.05, 1.4, 6), poste, 1.05, 1.3, ZF);
+  poner(new THREE.BoxGeometry(0.2, 0.26, 0.2), new THREE.MeshBasicMaterial({ color: '#ffcf7a' }), 1.05, 2.1, ZF);
+  const farol = new THREE.PointLight('#ffb547', 2.6, 14, 2); farol.position.set(1.05, 2.1, ZF); escena.add(farol);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaHalo('#ffb547'), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 }));
+  halo.position.set(1.05, 2.1, ZF); halo.scale.set(1.6, 1.6, 1); escena.add(halo);
+  const roca = phong('#30245e');
+  for (let i = 0; i < 26; i++) { let x = (azar() - 0.5) * 50; if (Math.abs(x) < 1.8) x += 3 * Math.sign(x || 1); poner(new THREE.DodecahedronGeometry(0.3 + azar() * 0.7, 0), roca, x, 0.2, 9.4 + azar() * 1.6).rotation.set(azar() * 3, azar() * 3, 0); }
+  const copa = phong('#1b1342'), tronco = phong('#2a1c3a');
+  for (let i = 0; i < 40; i++) {
+    const lado = i % 2 ? 1 : -1, x = lado * (5 + azar() * 40), z = 11 + azar() * 24, h = 4 + azar() * 5;
+    poner(new THREE.CylinderGeometry(0.15, 0.2, 1.2, 5), tronco, x, 1.05, z);
+    poner(new THREE.ConeGeometry(h * 0.3, h, 6), copa, x, 1.4 + h / 2, z);
+  }
+}
+
+/* ——— La otra orilla: cerros, bosque, la torre y dos islas flotantes ——— */
+poner(new THREE.BoxGeometry(700, 3, 120), phong('#1f1550'), 0, -1.2, -242);
+{
+  for (let i = 0; i < 32; i++) {
+    const r = 25 + azar() * 30, h = 18 + azar() * 42;
+    poner(new THREE.ConeGeometry(r, h, 5), phong(azar() < 0.5 ? '#2b1b66' : '#3a2585'), -310 + i * 20 + azar() * 10, h / 2 - 1, -205 - azar() * 55).rotation.y = azar() * 3;
+  }
+  const copa = phong('#1a1145');
+  for (let i = 0; i < 100; i++) { const h = 5 + azar() * 7; poner(new THREE.ConeGeometry(h * 0.28, h, 5), copa, -260 + azar() * 520, h / 2 + 0.3, -184 - azar() * 14); }
+  const piedra = phong('#36226e');
+  poner(new THREE.CylinderGeometry(4.5, 5.5, 32, 7), piedra, -48, 16, -205);
+  poner(new THREE.CylinderGeometry(4.6, 4.6, 6, 7), piedra, -47, 33.5, -205).rotation.z = 0.28;
+  poner(new THREE.BoxGeometry(1, 1.7, 0.4), new THREE.MeshBasicMaterial({ color: '#ffb547' }), -48, 22, -199.8);
+}
+const islas = [];
+for (const [x, y, z, s] of [[75, 48, -250, 1], [118, 64, -290, 0.6]]) {
+  const isla = new THREE.Group(); isla.position.set(x, y, z); isla.scale.setScalar(s); escena.add(isla);
+  poner(new THREE.ConeGeometry(14, 24, 6), phong('#33227a'), 0, -12, 0, isla).rotation.x = Math.PI;
+  poner(new THREE.CylinderGeometry(14, 14, 1.4, 6), phong('#4a379e'), 0, 0.7, 0, isla);
+  for (let i = 0; i < 6; i++) poner(new THREE.ConeGeometry(1.4, 6, 5), phong('#24185a'), (azar() - 0.5) * 18, 4.4, (azar() - 0.5) * 18, isla);
+  islas.push({ isla, y, fase: azar() * 6 });
+}
+
+/* ——— Boyas de distancia, medidas desde la punta del muelle ——— */
+const etiquetas = [];
+function dibujarEtiqueta(e) {
+  const g = e.lienzo.getContext('2d'); g.clearRect(0, 0, 256, 128);
+  g.font = '700 60px Karla, "Segoe UI", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = 'rgba(20,10,60,.95)'; g.shadowBlur = 14; g.fillStyle = 'rgba(239,233,255,.92)';
+  g.fillText(e.texto, 128, 66); e.tex.needsUpdate = true;
+}
+const boyas = [];
+for (const m of [10, 20, 30, 40]) {
+  const b = new THREE.Group(); b.position.set(-2.2, 0, 0.6 - m); escena.add(b);
+  poner(new THREE.CylinderGeometry(0.16, 0.24, 0.5, 8), phong('#3c2c7d'), 0, 0.05, 0, b);
+  poner(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshBasicMaterial({ color: '#9fe0ff' }), 0, 0.38, 0, b);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const e = { lienzo: c, tex: new THREE.CanvasTexture(c), texto: m + ' m' }; dibujarEtiqueta(e); etiquetas.push(e);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: e.tex, transparent: true, depthWrite: false }));
+  sp.position.y = 1.15; sp.scale.set(1.9, 0.95, 1); b.add(sp);
+  boyas.push(b);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => etiquetas.forEach(dibujarEtiqueta)).catch(() => {});
+
+/* ——— El personaje: proxy de Quinn (180 cm), de espaldas, en la punta del muelle ——— */
+const pj = new THREE.Group(); pj.position.set(0, 0.62, 0.6); escena.add(pj);
+const MAT = { capa: phong('#5a3fd1'), ropa: phong('#2c2163'), piel: phong('#e6c3bd'), pelo: phong('#24163a'), bota: phong('#1a1230') };
+for (const x of [-0.1, 0.1]) { poner(new THREE.CylinderGeometry(0.078, 0.062, 0.92, 7), MAT.ropa, x, 0.46, 0, pj); poner(new THREE.BoxGeometry(0.13, 0.1, 0.24), MAT.bota, x, 0.05, -0.04, pj); }
+const torso = new THREE.Group(); torso.position.y = 0.92; pj.add(torso);
+poner(new THREE.CylinderGeometry(0.2, 0.16, 0.62, 8), MAT.ropa, 0, 0.3, 0, torso);
+const capa = poner(new THREE.ConeGeometry(0.34, 0.95, 9, 1, true), phong('#5a3fd1', { side: THREE.DoubleSide }), 0, 0.15, 0.02, torso);
+poner(new THREE.CylinderGeometry(0.05, 0.06, 0.1, 6), MAT.piel, 0, 0.66, 0, torso);
+poner(new THREE.SphereGeometry(0.112, 14, 10), MAT.piel, 0, 0.77, -0.01, torso);
+poner(new THREE.SphereGeometry(0.12, 14, 10), MAT.pelo, 0, 0.8, 0.02, torso).scale.set(1, 0.92, 1);
+poner(new THREE.CylinderGeometry(0.03, 0.015, 0.26, 6), MAT.pelo, 0, 0.66, 0.12, torso).rotation.x = 0.35;
+const brazoIzq = new THREE.Group(); brazoIzq.position.set(-0.22, 0.56, 0); brazoIzq.rotation.set(0.28, 0, -0.12); torso.add(brazoIzq);
+poner(new THREE.CylinderGeometry(0.05, 0.04, 0.58, 6), MAT.capa, 0, -0.29, 0, brazoIzq);
+const brazoDer = new THREE.Group(); brazoDer.position.set(0.22, 0.56, 0); torso.add(brazoDer);
+poner(new THREE.CylinderGeometry(0.05, 0.04, 0.56, 6), MAT.capa, 0, -0.28, 0, brazoDer);
+poner(new THREE.SphereGeometry(0.045, 8, 6), MAT.piel, 0, -0.57, 0, brazoDer);
+
+/* ——— La caña: mango, carrete y seis tramos que se doblan con la velocidad ——— */
+const cana = new THREE.Group(); torso.add(cana);
+const MAT_CANA = phong('#2a1f57', { shininess: 50, specular: '#8f86d8' });
+poner(new THREE.CylinderGeometry(0.02, 0.025, 0.5, 8), phong('#7a5444'), 0, 0.1, 0, cana);
+poner(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 10), phong('#9aa0c8', { shininess: 60 }), 0, 0.15, -0.075, cana);
+poner(new THREE.CylinderGeometry(0.006, 0.006, 0.06, 4), MAT_CANA, 0, 0.15, -0.04, cana).rotation.x = Math.PI / 2;
+const N_SEG = 6, L_SEG = 0.38, segs = [], flex = [];
+for (let i = 0; i < N_SEG; i++) {
+  const g = new THREE.Group(); g.position.y = i === 0 ? 0.35 : L_SEG; (i === 0 ? cana : segs[i - 1]).add(g);
+  const r0 = lerp(0.016, 0.004, i / N_SEG), r1 = lerp(0.016, 0.004, (i + 1) / N_SEG);
+  poner(new THREE.CylinderGeometry(r1, r0, L_SEG, 6), MAT_CANA, 0, L_SEG / 2, 0, g);
+  segs.push(g); flex.push({ a: 0, v: 0 });
+}
+const punta = new THREE.Object3D(); punta.position.y = L_SEG; segs[N_SEG - 1].add(punta);
+poner(new THREE.SphereGeometry(0.012, 6, 4), new THREE.MeshBasicMaterial({ color: '#dff4ff' }), 0, 0, 0, punta);
+
+/* ——— El señuelo, el sedal y las salpicaduras ——— */
+const senuelo = poner(new THREE.SphereGeometry(0.05, 12, 8), new THREE.MeshBasicMaterial({ color: '#ffc566' }), 0, 0, 0);
+const haloSen = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaHalo('#ffb547'), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85 }));
+escena.add(haloSen);
+const N_LINEA = 48, linGeo = new THREE.BufferGeometry();
+linGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N_LINEA * 3), 3));
+const linea = new THREE.Line(linGeo, new THREE.LineBasicMaterial({ color: '#dff4ff', transparent: true, opacity: 0.75 }));
+linea.frustumCulled = false; escena.add(linea);
+const linPos = linGeo.attributes.position, _c = new THREE.Vector3();
+function tenderLinea(a, b, comba, t) {
+  _c.copy(a).add(b).multiplyScalar(0.5); _c.y -= comba;
+  for (let i = 0; i < N_LINEA; i++) {
+    const u = i / (N_LINEA - 1), k = 1 - u;
+    const x = k * k * a.x + 2 * k * u * _c.x + u * u * b.x, z = k * k * a.z + 2 * k * u * _c.z + u * u * b.z;
+    const y = Math.max(k * k * a.y + 2 * k * u * _c.y + u * u * b.y, olas(x, z, t) + 0.015);
+    linPos.setXYZ(i, x, y, z);
+  }
+  linPos.needsUpdate = true;
+}
+const GEO_ANILLO = new THREE.RingGeometry(0.9, 1, 48); GEO_ANILLO.rotateX(-Math.PI / 2);
+const GEO_GOTA = new THREE.SphereGeometry(0.035, 5, 4), MAT_GOTA = new THREE.MeshBasicMaterial({ color: '#e6f3ff' });
+const anillos = [], gotas = [];
+function anillo(x, z, demora, tam, vida, opac) {
+  const m = new THREE.Mesh(GEO_ANILLO, new THREE.MeshBasicMaterial({ color: '#d8ecff', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+  m.position.set(x, 0, z); m.visible = false; escena.add(m); anillos.push({ m, t: -demora, tam, vida, opac });
+}
+function lanzarGotas(x, z, n, fuerza, s) {
+  for (let i = 0; i < n; i++) {
+    const m = poner(GEO_GOTA, MAT_GOTA, x, 0.05, z); m.scale.setScalar(s);
+    const th = azar() * Math.PI * 2, h = (0.6 + azar() * 1.2) * (0.7 + fuerza * 0.6);
+    gotas.push({ m, v: new THREE.Vector3(Math.cos(th) * h, 2.2 + azar() * 2.6 * (0.6 + fuerza), Math.sin(th) * h), s });
+  }
+}
+function salpicar(x, z, fuerza, dist) {
+  const s = 1 + dist / 18;
+  anillo(x, z, 0, 2.2 * s, 1.3, 0.85); anillo(x, z, 0.18, 3.4 * s, 1.8, 0.55); anillo(x, z, 0.45, 1.4 * s, 1.1, 0.5);
+  lanzarGotas(x, z, 18, fuerza, s);
+}
+function chapotear(x, z) {
+  const dist = Math.hypot(x - pj.position.x, z - pj.position.z), s = 1 + dist / 18;
+  anillo(x, z, 0, 1.3 * s, 0.9, 0.6);
+  lanzarGotas(x, z, 7, 0.1, s);
+  sonChapoteo(dist);
+}
+
+/* ——— El pez: una sombra bajo la superficie y, al sacarlo, el pez colgando del sedal ——— */
+function texturaSombraPez() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const g = c.getContext('2d'); g.filter = 'blur(6px)'; g.fillStyle = 'rgba(8,4,30,1)';
+  g.beginPath(); g.ellipse(140, 64, 80, 26, 0, 0, Math.PI * 2); g.fill();          // el cuerpo, con la cabeza hacia +X
+  g.beginPath(); g.moveTo(72, 64); g.lineTo(26, 34); g.lineTo(36, 64); g.lineTo(26, 94); g.closePath(); g.fill();
+  return new THREE.CanvasTexture(c);
+}
+const geoSombra = new THREE.PlaneGeometry(1.0, 0.5); geoSombra.rotateX(-Math.PI / 2);
+const sombraPez = new THREE.Mesh(geoSombra, new THREE.MeshBasicMaterial({ map: texturaSombraPez(), transparent: true, opacity: 0, depthWrite: false }));
+sombraPez.visible = false; escena.add(sombraPez);
+const pezColgado = new THREE.Group(); pezColgado.visible = false; escena.add(pezColgado);
+{
+  const escama = phong('#4fc6e0', { shininess: 80, specular: '#e0d4ff', emissive: '#14244a' });
+  poner(new THREE.SphereGeometry(1, 14, 10), escama, 0, -0.24, 0, pezColgado).scale.set(0.075, 0.24, 0.035);
+  poner(new THREE.ConeGeometry(0.08, 0.13, 4), phong('#7b5cff'), 0, -0.5, 0, pezColgado).scale.set(1, 1, 0.3);
+  poner(new THREE.SphereGeometry(0.012, 6, 4), new THREE.MeshBasicMaterial({ color: '#0b0820' }), 0, -0.07, 0.03, pezColgado);
+}
+
+/* ——— Sonido: todo sintetizado, arranca con el primer click ——— */
+let ac = null, mudo = false, bufRuido = null;
+function audioListo() {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; } }
+  if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+  return !!ac && !mudo;
+}
+function ruido() {
+  if (!bufRuido) { const n = ac.sampleRate; bufRuido = ac.createBuffer(1, n, n); const d = bufRuido.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; }
+  return bufRuido;
+}
+function soplo(t0, dur, filtro, f0, f1, q, vol) {
+  const src = ac.createBufferSource(); src.buffer = ruido();
+  const f = ac.createBiquadFilter(); f.type = filtro; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.6);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + dur * 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f).connect(g).connect(ac.destination); src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.02);
+}
+function sonLatigazo(fuerza) { if (audioListo()) soplo(ac.currentTime, 0.3, 'bandpass', 380, 2200 + 1800 * fuerza, 1.4, 0.2 + 0.35 * fuerza); }
+function sonClic(vol) { if (audioListo()) soplo(ac.currentTime, 0.022, 'highpass', 2600, 3400, 0.7, vol); }
+function sonPlop(dist) {
+  if (!audioListo()) return;
+  const t0 = ac.currentTime, v = 0.55 / (1 + dist / 14);
+  const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine';
+  o.frequency.setValueAtTime(430, t0); o.frequency.exponentialRampToValueAtTime(95, t0 + 0.13);
+  g.gain.setValueAtTime(v, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+  o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + 0.22);
+  soplo(t0, 0.35, 'lowpass', 1400, 500, 0.8, v * 0.7);
+}
+function tono(f0, f1, dur, vol, demora) {
+  if (!audioListo()) return;
+  const t0 = ac.currentTime + (demora || 0), o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine';
+  o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.7);
+  g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function sonTiron(dist, v) {
+  if (!audioListo()) return;
+  const f = clamp(v / 3, 0.3, 1);
+  soplo(ac.currentTime, 0.14, 'bandpass', 2400, 700, 2.2, 0.06 + 0.14 * f);                       // el sedal que se tensa
+  soplo(ac.currentTime + 0.03, 0.22, 'lowpass', 1100, 400, 0.7, (0.1 + 0.2 * f) / (1 + dist / 14)); // el agua
+}
+function sonPicada(dist) { tono(880, 520, 0.07, 0.1 / (1 + dist / 18)); }
+function sonEnganche() { tono(170, 60, 0.22, 0.45); if (audioListo()) soplo(ac.currentTime, 0.12, 'highpass', 2000, 3000, 0.8, 0.2); }
+function sonCaptura() { tono(660, 660, 0.2, 0.12); tono(990, 990, 0.35, 0.1, 0.12); }
+function sonChapoteo(dist) { if (audioListo()) soplo(ac.currentTime, 0.3, 'lowpass', 1500, 450, 0.7, 0.35 / (1 + dist / 14)); }
+function sonCorte() { if (!audioListo()) return; soplo(ac.currentTime, 0.09, 'highpass', 3500, 6000, 0.9, 0.35); tono(1400, 260, 0.16, 0.14); }
+
+/* ——— Estado del juego ——— */
+let estado = 'listo';                     // listo · cargando · lanzando · vuelo · agua · recogiendo
+let carga = 0, tCarga = 0, inicioCarga = 0, cargaSoltada = 0;
+let angCana = ANG_REPOSO, angPrev = ANG_REPOSO;
+let barrido = null, asentar = null, vuelo = null, enAgua = null, recogida = null;
+let yaw = 0, yawObj = 0, camYaw = 0, golpeFov = 0;
+let ultimo = 0, mejor = 0, acumClic = 0, lineaPrev = 0;
+let tension = 0, pico = 0, gesto = null, angTiron = 0, holgura = 1, hundir = 0, hundirVis = 0, capturas = 0, avisoT = 0, angBase = ANG_REPOSO;
+let pelea = null, cobrando = false, cobrandoTactil = false, botones = 0;
+let soltando = false, teclaQ = false, soltandoTactil = false, angLado = 0;
+// fases del pez: nada · espera · acercando · picando · mordida · enganchado · huyendo
+const pez = { fase: 'nada', t: 0, pos: new THREE.Vector3(), rumbo: 0, opac: 0, mordidas: 0, picada: -1, chapoteo: 0, colgado: 0 };
+const r2 = (x) => Math.round(x * 100) / 100;
+window.__pesca = () => ({ estado, fase: pez.fase, tension: r2(tension), capturas,   // lectura para depurar
+  boya: enAgua ? r2(Math.hypot(enAgua.ox - pj.position.x, enAgua.oz - pj.position.z)) : null,
+  pelea: pelea ? { dist: r2(Math.hypot(pelea.p.x - pj.position.x, pelea.p.z - pj.position.z)), modo: pelea.modo, lado: pelea.lado, energia: r2(pelea.energia), soltando } : null });
+const se = { p: new THREE.Vector3(0, 2.5, 0), prev: new THREE.Vector3(0, 2.5, 0) };
+const tip = new THREE.Vector3(), mano = new THREE.Vector3(), _v = new THREE.Vector3();
+const reducir = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const tactil = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+
+/* ——— Medición de la prueba ———
+   En la versión web (meta pesca:modo = prueba) cada sesión es un documento en Firestore; la conexión
+   (window.__guardarPartida) la agrega sólo esa versión, así que acá guardarMed() no hace nada.
+   Se guarda en momentos con sentido: el primer lance, cada 5 lances, cada pelea terminada, al terminar y al irse. */
+const MODO_PRUEBA = (document.querySelector('meta[name="pesca:modo"]') || {}).content === 'prueba';
+const VERSION_JUEGO = '2026-10-25';
+const r1 = (x) => Math.round(x * 10) / 10;
+const med = {
+  sesion: Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
+  version: VERSION_JUEGO, inicio: new Date().toISOString(), dispositivo: tactil ? 'tactil' : 'mouse',
+  pantalla: window.innerWidth + 'x' + window.innerHeight,
+  segundos: 0, primerLanceSeg: null, ayudaAbierta: false,
+  lances: 0, distancias: [], peces: 0, asustados: 0, mordidas: 0, seFueron: 0, enganchados: 0,
+  reaccionMs: [], peleas: [], capturas: 0, diversion: null, comentario: '', terminada: false, estadoAlGuardar: ''
+};
+let peleaMed = null, guardando = false, guardarDeNuevo = false, tMordida = 0, soltandoAntes = false;
+async function guardarMed() {
+  if (!window.__guardarPartida) return;
+  if (guardando) { guardarDeNuevo = true; return; }   // una escritura a la vez; la que espera sale con los datos al día
+  guardando = true;
+  med.segundos = Math.round(tiempo); med.estadoAlGuardar = estado; med.capturas = capturas;
+  try { await window.__guardarPartida(med.sesion, JSON.parse(JSON.stringify(med))); } catch (e) { /* sin red o rechazada: va en el próximo guardado */ }
+  guardando = false;
+  if (guardarDeNuevo) { guardarDeNuevo = false; guardarMed(); }
+}
+function finPelea(resultado) {
+  if (!peleaMed) return;
+  if (med.peleas.length < 100) med.peleas.push({ seg: r1(tiempo - peleaMed.t0), resultado, usosQ: peleaMed.usosQ, bien: r2(peleaMed.bien), mal: r2(peleaMed.mal) });
+  peleaMed = null;
+  guardarMed();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarMed(); });
+
+function empezarCarga() { estado = 'cargando'; tCarga = 0; carga = 0; asentar = null; inicioCarga = performance.now(); }
+function soltar() {
+  cargaSoltada = carga; estado = 'lanzando';
+  barrido = { desde: angCana, t: 0, dur: lerp(0.26, 0.13, carga), solto: false };
+  golpeFov = reducir ? 0 : 1.5 + 3 * carga;
+  sonLatigazo(carga);
+}
+function lanzar() {
+  estado = 'vuelo';
+  const R = lerp(R_MIN, R_MAX, cargaSoltada);
+  const dx = -Math.sin(yaw), dz = -Math.cos(yaw);
+  const destino = new THREE.Vector3(pj.position.x + dx * R, 0, pj.position.z + dz * R);
+  const p0 = se.p.clone(), T = 0.55 + R * 0.03;
+  vuelo = { p0, destino, R, T, t: 0, vx: (destino.x - p0.x) / T, vz: (destino.z - p0.z) / T, vy: (0 - p0.y + 0.5 * G * T * T) / T };
+  lineaPrev = tip.distanceTo(se.p); acumClic = 0;
+}
+function caer(t) {
+  estado = 'agua';
+  const { destino, R } = vuelo;
+  enAgua = { x: destino.x, z: destino.z, ox: destino.x, oz: destino.z, R, tAnillo: 1.4, t0: t };
+  pez.fase = 'espera'; pez.t = 2.5 + azar() * 3.5; tension = 0; pico = 0;
+  salpicar(destino.x, destino.z, cargaSoltada, R);
+  sonPlop(R);
+  // la distancia se mide sobre el agua, de la punta del muelle al punto de caída
+  ultimo = Math.hypot(destino.x - pj.position.x, destino.z - pj.position.z);
+  const record = ultimo > mejor; if (record) mejor = ultimo;
+  pintarLectura(record);
+  vuelo = null;
+  med.lances++; if (med.distancias.length < 300) med.distancias.push(r1(ultimo));
+  if (med.primerLanceSeg === null) { med.primerLanceSeg = Math.round(tiempo); guardarMed(); }
+  else if (med.lances % 5 === 0) guardarMed();
+}
+function recoger() {
+  const conPez = pez.fase === 'enganchado';
+  const R = Math.hypot(se.p.x - pj.position.x, se.p.z - pj.position.z);
+  estado = 'recogiendo';
+  recogida = { desde: se.p.clone(), t: 0, dur: (0.45 + R * 0.03) * (conPez ? 1.7 : 1), ultimoAnillo: 0, conPez, sacado: false };
+  if (conPez) pez.rumbo = Math.atan2(-(pj.position.z - se.p.z), pj.position.x - se.p.x);   // la cabeza hacia el muelle: lo traen de la boca
+  else if (pez.fase === 'acercando' || pez.fase === 'picando' || pez.fase === 'mordida') { pez.rumbo += Math.PI; pez.fase = 'huyendo'; pez.t = 1.1; }
+  else if (pez.fase !== 'huyendo') pez.fase = 'nada';
+  acumClic = 0; enAgua = null; tension = 0; pico = 0; gesto = null; pelea = null;
+}
+function empezarTiron(x, y) { gesto = { x0: x, y0: y, x, y, nx: 0, ny: 0, d: 0, t: performance.now(), sono: false }; }
+function moverTiron(x, y) {
+  const ahora = performance.now(), dts = Math.max(0.004, (ahora - gesto.t) / 1000), H = window.innerHeight;
+  const nx = (x - gesto.x0) / H, ny = (gesto.y0 - y) / H;   // en pantallas: derecha y arriba positivos
+  const gx = nx - gesto.nx, gy = ny - gesto.ny;               // lo que se movió el mouse desde el último evento
+  const d = Math.max(0, ny), dd = d - gesto.d;                // subir el mouse es tirar
+  gesto.t = ahora; gesto.nx = nx; gesto.ny = ny; gesto.d = d; gesto.x = x; gesto.y = y;
+  if (!enAgua) return;
+  if (estado === 'enganchado') { tirarDelPez(gx, gy, dts); return; }
+  if (dd <= 0) return;                                        // bajar el mouse no tira: sólo cuenta lo que subís
+  const v = Math.min(6, dd / dts);
+  pico = Math.min(T_MAX, pico + GANANCIA * dd * v); tension = pico;
+  const dx = pj.position.x - enAgua.ox, dz = pj.position.z - enAgua.oz, dist = Math.hypot(dx, dz);
+  const paso = Math.min(dd * METROS_POR_PANTALLA, Math.max(0, dist - 2.5));   // la boya viene hacia vos, hasta 2,5 m del muelle
+  enAgua.ox += dx / dist * paso; enAgua.oz += dz / dist * paso;
+  if (!gesto.sono && v > 1.2) { gesto.sono = true; sonTiron(dist, v); anillo(enAgua.x, enAgua.z, 0, 0.7, 0.7, 0.45); }
+  if ((pez.fase === 'acercando' || pez.fase === 'picando') && tension > SUSTO) { pez.rumbo += Math.PI; pez.fase = 'huyendo'; pez.t = 1.1; aviso('Lo asustaste', 'frio'); med.asustados++; }
+  else if (pez.fase === 'mordida' && tension >= UMBRAL) enganchar();
+}
+function terminarTiron() { gesto = null; }
+// Hacia dónde hay que tirar el mouse, en pantalla (derecha y arriba positivos): contra la corrida.
+// Si corre a la derecha, a la izquierda; a la izquierda, a la derecha; si se va para adentro o descansa, hacia arriba.
+function contraCorrida() {
+  if (pelea.modo === 'tira' && pelea.lado !== 0) return { x: -pelea.lado, y: 0 };
+  return { x: 0, y: 1 };
+}
+// Tirar del pez: lo que va contra la corrida lo arrima, lo cansa y le acorta la corrida, y tensa un poco
+// (por eso, con el pez fresco, cada tantos tirones hay que soltar con Q); lo que va a favor o cruzado sólo tensa, y mucho.
+function tirarDelPez(dx, dy, dts) {
+  const largo = Math.hypot(dx, dy); if (largo < 1e-5) return;
+  const v = Math.min(6, largo / dts), c = contraCorrida();
+  const a = dx * c.x + dy * c.y, cruzado = Math.abs(dx * c.y - dy * c.x);
+  const bueno = Math.max(0, a), malo = Math.max(0, -a) + 0.6 * cruzado;
+  pico = Math.min(T_MAX, pico + GANANCIA * v * (bueno * 0.35 + malo * 0.9));
+  if (peleaMed) { peleaMed.bien += bueno; peleaMed.mal += malo; }
+  const P = pelea.p, rx = pj.position.x - P.x, rz = pj.position.z - P.z, dist = Math.hypot(rx, rz);
+  const paso = bueno * METROS_POR_PANTALLA * (pelea.modo === 'cede' ? 1.2 : 0.8);
+  P.x += rx / dist * paso; P.z += rz / dist * paso;
+  if (pelea.modo === 'tira') { pelea.energia = Math.max(0, pelea.energia - bueno * 0.25); pelea.modoT -= bueno * 2.5; }   // le das vuelta la cabeza
+  if (!gesto.sono && v > 1.2) { gesto.sono = true; sonTiron(dist, v); }
+}
+function pelear(dt, t) {
+  const P = pelea.p;
+  pelea.modoT -= dt;
+  if (pelea.modoT <= 0) {
+    if (pelea.modo === 'cede' && pelea.energia > 0.12) { pelea.modo = 'tira'; pelea.modoT = (1 + 2 * pelea.energia) * (0.7 + azar() * 0.6); pelea.lado = elegirLado(pelea.lado); }
+    else { pelea.modo = 'cede'; pelea.modoT = 1.4 + azar() * 1.2; }
+  }
+  const tira = pelea.modo === 'tira', aguanta = !!gesto;
+  // la fuerza baja con el cansancio, y la corrida viene a sacudones
+  const fuerza = (0.6 + 0.5 * pelea.energia) * (1 + 0.15 * Math.sin(t * 5));
+  // se cansa corriendo, y más rápido cuanto más le resistís; descansando recupera un poco
+  pelea.energia = clamp(pelea.energia + dt * (tira ? -(0.05 + (aguanta ? 0.08 : 0) + (cobrando ? 0.06 : 0)) : 0.02), 0, 1);
+  // el movimiento: radial (positivo = se aleja) y de costado. Cuando tira, el freno patina y cobrar no lo trae
+  const dx = P.x - pj.position.x, dz = P.z - pj.position.z, D = Math.hypot(dx, dz), ux = dx / D, uz = dz / D;
+  // corre para adentro (lado 0) o de costado (±1: derecha e izquierda vistas desde el muelle); con Q, el freno abierto le da sedal
+  const freno = aguanta ? 0.5 : 1;
+  let vr, vt;
+  if (tira) {
+    vr = (pelea.lado === 0 ? 1.6 : 0.5) * fuerza * freno;
+    vt = pelea.lado === 0 ? Math.sin(t * 1.3) * 0.25 : 1.5 * fuerza * pelea.lado * (aguanta ? 0.6 : 1);
+  } else { vr = cobrando && !soltando ? -VEL_COBRO : 0.15; vt = Math.sin(t * 0.8) * 0.3; }
+  if (soltando) vr += tira ? 1.0 * fuerza : 0.6;
+  const vx = ux * vr - uz * vt, vz = uz * vr + ux * vt;
+  pelea.vx = vx; pelea.vz = vz;
+  P.x = clamp(P.x + vx * dt, -70, 70); P.z = clamp(P.z + vz * dt, -170, pj.position.z - 1);
+  if (Math.hypot(vx, vz) > 0.2) pez.rumbo = Math.atan2(-vz, vx);
+  // el carrete: chilla cuando el pez saca sedal, cliquea cuando cobrás
+  acumClic += Math.abs(vr) * dt;
+  const paso = vr > 0 ? 0.09 : 0.35;
+  for (let n = 0; acumClic > paso && n < 3; n++) { acumClic -= paso; sonClic(vr > 0 ? (tira ? 0.05 : 0.02) : 0.035); }
+  // la tensión
+  // Q suelta: la tensión se cae rápido, también la de los tirones
+  const objetivo = soltando ? 0.08 : (tira ? fuerza : 0.12) * (aguanta ? 1 : 0.55) + (cobrando ? 0.3 : 0);
+  pelea.carga += (objetivo - pelea.carga) * clamp(dt * (soltando ? 10 : 6), 0, 1);
+  if (soltando) pico *= Math.exp(-dt * 5);
+  tension = pelea.carga + pico;
+  pelea.tRotura = tension > T_ROTURA ? pelea.tRotura + dt : 0;
+  // soltar durante una corrida no afloja del todo: el pez sigue tirando del sedal que sale
+  pelea.tFloja = tension < T_FLOJA ? pelea.tFloja + dt * (soltando && tira ? 0.6 : 1) : 0;
+  if (pelea.gracia > 0) pelea.gracia -= dt;
+  enAgua.ox = P.x; enAgua.oz = P.z;
+  if (pelea.gracia <= 0 && pelea.tRotura > 0.3) cortar();
+  else if (pelea.tFloja > 2.5) soltarse();
+  else if (D <= 3) recoger();   // al alcance: lo sacás del agua
+}
+function elegirLado(anterior) {   // −1 izquierda, 0 adentro, +1 derecha; nunca dos corridas iguales seguidas
+  const opciones = [-1, 0, 1].filter((l) => l !== anterior);
+  return opciones[Math.floor(azar() * opciones.length)];
+}
+function huirDelMuelle() {
+  pez.rumbo = Math.atan2(-(pez.pos.z - pj.position.z), pez.pos.x - pj.position.x);
+  pez.fase = 'huyendo'; pez.t = 1.1;
+}
+function cortar() {
+  aviso('Se cortó el sedal', 'frio'); sonCorte(); finPelea('cortado');
+  huirDelMuelle();
+  pelea = null; enAgua = null; estado = 'listo'; gesto = null; pico = 0; tension = 0;
+  se.p.copy(tip); se.prev.copy(tip);      // un señuelo nuevo en la punta
+  for (const f of flex) f.v += 9;         // la caña salta para atrás
+  pintarLectura(false);
+}
+function soltarse() {
+  aviso('Se soltó', 'frio'); finPelea('soltado');
+  huirDelMuelle();
+  pelea = null; estado = 'agua'; pico = 0; tension = 0;
+  enAgua.ox = enAgua.x; enAgua.oz = enAgua.z;
+  pintarLectura(false);
+}
+function morder() {
+  pez.fase = 'mordida'; pez.t = VENTANA_MORDIDA;
+  med.mordidas++; tMordida = performance.now();
+  const dist = Math.hypot(se.p.x - pj.position.x, se.p.z - pj.position.z);
+  if (enAgua) { enAgua.ox += Math.cos(pez.rumbo) * 0.35; enAgua.oz = Math.min(enAgua.oz - Math.sin(pez.rumbo) * 0.35, pj.position.z - 2.5); }
+  anillo(se.p.x, se.p.z, 0, 1.4, 1.0, 0.6);
+  sonPlop(dist * 1.6);
+}
+function enganchar() {
+  estado = 'enganchado'; pez.fase = 'enganchado'; pez.chapoteo = 0.25; pico = 0;
+  med.enganchados++; if (med.reaccionMs.length < 100) med.reaccionMs.push(Math.round(performance.now() - tMordida));   // cuánto tardó en clavar
+  peleaMed = { t0: tiempo, usosQ: 0, bien: 0, mal: 0 };
+  if (gesto) { gesto.x0 = gesto.x; gesto.y0 = gesto.y; gesto.nx = gesto.ny = gesto.d = 0; }   // si seguís con el click apretado, ya estás aguantando
+  // arranca corriendo, con un respiro de 0,8 s antes de que la tensión pueda cortar
+  pelea = { p: new THREE.Vector3(enAgua.x, 0, enAgua.z), energia: 1, modo: 'tira', modoT: 1.6 + azar(), lado: elegirLado(null), carga: 0.6, tRotura: 0, tFloja: 0, gracia: 0.8, vx: 0, vz: 0 };
+  aviso('¡Enganchado!', 'fijo');
+  sonEnganche(); chapotear(se.p.x, se.p.z);
+}
+function sacarPez() {
+  recogida.sacado = true; pez.fase = 'nada'; pez.colgado = 2.6;
+  chapotear(se.p.x, se.p.z);
+}
+function capturar() {
+  capturas++; pintarLectura(false);
+  aviso('Capturado'); sonCaptura(); finPelea('capturado');
+}
+function aviso(texto, tipo) {
+  elAviso.textContent = texto;
+  elAviso.className = 'aviso visible' + (tipo === 'frio' ? ' frio' : '');
+  avisoT = tipo === 'fijo' ? 0 : 1.6;
+}
+function accion() {   // tocar en el táctil: cargar o soltar
+  if (estado === 'listo') empezarCarga();
+  else if (estado === 'cargando') soltar();
+}
+
+function actualizarPez(dt, t) {
+  // la boya: hundida mientras el pez muerde o tironea, y una picada corta por cada mordisqueo
+  const hundirObj = pez.fase === 'mordida' || (pez.fase === 'enganchado' && estado === 'enganchado') ? 0.24 : 0;
+  hundir += (hundirObj - hundir) * clamp(dt * 16, 0, 1);
+  if (pez.picada >= 0) { pez.picada += dt; if (pez.picada > 0.28) pez.picada = -1; }
+  hundirVis = hundir + (pez.picada >= 0 ? Math.sin(Math.PI * pez.picada / 0.28) * 0.05 : 0);
+
+  if (pez.fase === 'nada') { pez.opac = 0; sombraPez.visible = false; return; }
+  pez.t -= dt;
+  const lx = se.p.x, lz = se.p.z, dist = Math.hypot(lx - pj.position.x, lz - pj.position.z);
+  if (pez.fase === 'espera') {
+    if (pez.t <= 0) {
+      // aparece a 7 m de la boya, siempre del lado del lago, y nada hacia ella
+      const a = azar() * Math.PI * 2;
+      let x = lx + Math.cos(a) * 7, z = lz + Math.sin(a) * 7;
+      if (z > pj.position.z - 4) z = lz - Math.abs(Math.sin(a)) * 7 - 1;
+      pez.pos.set(x, 0, z); pez.opac = 0;
+      pez.fase = 'acercando'; pez.mordidas = 1 + Math.floor(azar() * 3); med.peces++;
+    }
+  } else if (pez.fase === 'acercando') {
+    const dx = lx - pez.pos.x, dz = lz - pez.pos.z, d = Math.hypot(dx, dz);
+    pez.rumbo = Math.atan2(-dz, dx);
+    pez.pos.x += dx / d * 2 * dt; pez.pos.z += dz / d * 2 * dt;
+    if (d < 0.5) { pez.fase = 'picando'; pez.t = 0.5 + azar() * 0.6; }
+  } else if (pez.fase === 'huyendo') {
+    pez.pos.x += Math.cos(pez.rumbo) * 5 * dt; pez.pos.z -= Math.sin(pez.rumbo) * 5 * dt;
+    if (pez.t <= 0) { pez.fase = estado === 'agua' ? 'espera' : 'nada'; pez.t = 3 + azar() * 4; }
+  } else {
+    // picando, mordida, enganchado: la boca en la boya
+    if (pez.fase === 'enganchado') pez.rumbo += Math.sin(t * 7) * 0.05;
+    pez.pos.set(lx - Math.cos(pez.rumbo) * 0.38, 0, lz + Math.sin(pez.rumbo) * 0.38);
+    if (pez.fase === 'picando' && pez.t <= 0) {
+      if (pez.mordidas > 0) { pez.mordidas--; pez.picada = 0; sonPicada(dist); anillo(lx, lz, 0, 0.5, 0.6, 0.3); pez.t = 0.6 + azar() * 0.8; }
+      else morder();
+    } else if (pez.fase === 'mordida' && pez.t <= 0) {
+      pez.rumbo += Math.PI; pez.fase = 'huyendo'; pez.t = 1.1; aviso('Se fue', 'frio'); med.seFueron++;
+    } else if (pez.fase === 'enganchado') {
+      pez.chapoteo -= dt;
+      if (pez.chapoteo <= 0) {
+        const enElAgua = estado === 'enganchado' || (recogida && recogida.t / recogida.dur < 0.85);
+        if (enElAgua) chapotear(lx, lz);
+        // corriendo chapotea seguido; cediendo, de a ratos; mientras lo sacás, sin parar
+        pez.chapoteo = estado !== 'enganchado' ? 0.3 + azar() * 0.25 : pelea && pelea.modo === 'tira' ? 0.35 + azar() * 0.35 : 1.6 + azar();
+      }
+    }
+  }
+  const opObj = pez.fase === 'espera' || pez.fase === 'huyendo' ? 0 : 0.6;
+  pez.opac += (opObj - pez.opac) * clamp(dt * 4, 0, 1);
+  sombraPez.visible = pez.opac > 0.01;
+  sombraPez.material.opacity = pez.opac;
+  sombraPez.position.set(pez.pos.x, olas(pez.pos.x, pez.pos.z, t) + 0.012, pez.pos.z);
+  sombraPez.rotation.y = pez.rumbo + Math.sin(t * (pez.fase === 'enganchado' ? 18 : 8)) * 0.12;
+}
+
+/* ——— Entrada ———
+   Click derecho: carga, y otro click suelta. Con la boya en el agua, mantenerlo cobra.
+   Click izquierdo sostenido: aguanta la caña; subir el mouse es el tirón (o el bombeo, con el pez enganchado).
+   Los botones se leen de e.buttons: apretar el segundo con el primero ya apretado no dispara otro pointerdown. */
+lienzo.addEventListener('contextmenu', (e) => e.preventDefault());
+let toque = null;
+function capturar_puntero(e) { try { lienzo.setPointerCapture(e.pointerId); } catch (err) { /* sin captura, el gesto sigue mientras el mouse esté en la ventana */ } }
+const conLinea = () => estado === 'agua' || estado === 'enganchado';
+function botonesMouse(e) {
+  const antes = botones; botones = e.buttons;
+  const bajo = botones & ~antes, subio = antes & ~botones;
+  if (bajo & 2) { if (estado === 'listo') empezarCarga(); else if (estado === 'cargando') soltar(); }
+  if (bajo & 1) { if (estado === 'cargando') soltar(); else if (conLinea()) empezarTiron(e.clientX, e.clientY); }
+  if ((subio & 1) && gesto) terminarTiron();
+}
+lienzo.addEventListener('pointerdown', (e) => {
+  audioListo();
+  if (e.pointerType === 'mouse') { botonesMouse(e); capturar_puntero(e); return; }
+  toque = { x: e.clientX, y: e.clientY };
+  if (conLinea()) { empezarTiron(e.clientX, e.clientY); capturar_puntero(e); }   // en el táctil, el dedo apoyado aguanta y arrastrar tira
+});
+lienzo.addEventListener('pointerup', (e) => {
+  if (e.pointerType === 'mouse') { botonesMouse(e); return; }
+  const habiaGesto = !!gesto;
+  if (gesto) terminarTiron();
+  if (toque && !habiaGesto && Math.hypot(e.clientX - toque.x, e.clientY - toque.y) < 12) accion();
+  toque = null;
+});
+lienzo.addEventListener('pointercancel', () => { if (gesto) terminarTiron(); toque = null; botones = 0; });
+window.addEventListener('blur', () => { botones = 0; cobrandoTactil = false; soltandoTactil = false; teclaQ = false; if (gesto) terminarTiron(); });
+// Q sostenida: soltar tensión
+const esQ = (e) => e.code === 'KeyQ' || e.key === 'q' || e.key === 'Q';
+const esCampo = (el) => !!el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT');
+window.addEventListener('keydown', (e) => { if (esQ(e) && !esCampo(e.target)) teclaQ = true; });
+window.addEventListener('keyup', (e) => { if (esQ(e)) teclaQ = false; });
+window.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse' && e.buttons !== botones) botonesMouse(e);
+  if (gesto) { moverTiron(e.clientX, e.clientY); return; }
+  if (estado !== 'listo' && estado !== 'cargando') return;
+  yawObj = -(e.clientX / window.innerWidth - 0.5) * 2 * YAW_MAX;
+});
+
+/* ——— HUD ——— */
+const elDist = $('#dist'), elMejor = $('#mejor'), elBarra = $('#barra'), elRelleno = $('#relleno'), elFantasma = $('#fantasma'), elPista = $('#pista');
+const elPeces = $('#peces'), elAviso = $('#aviso'), elMedCarga = $('#medCarga'), elMedTension = $('#medTension'), elBarraT = $('#barraT'), elRellenoT = $('#rellenoT');
+const elCobrar = $('#btnCobrar'), elCerca = $('#cerca');
+elCobrar.addEventListener('pointerdown', (e) => { audioListo(); cobrandoTactil = true; try { elCobrar.setPointerCapture(e.pointerId); } catch (err) { /* sigue igual */ } });
+for (const ty of ['pointerup', 'pointercancel']) elCobrar.addEventListener(ty, () => { cobrandoTactil = false; });
+elCobrar.addEventListener('contextmenu', (e) => e.preventDefault());
+const elSoltar = $('#btnSoltar'), elFlecha = $('#flecha');
+elSoltar.addEventListener('pointerdown', (e) => { soltandoTactil = true; try { elSoltar.setPointerCapture(e.pointerId); } catch (err) { /* sigue igual */ } });
+for (const ty of ['pointerup', 'pointercancel']) elSoltar.addEventListener(ty, () => { soltandoTactil = false; });
+elSoltar.addEventListener('contextmenu', (e) => e.preventDefault());
+// la flecha de la corrida: sobre el pez, apuntando hacia donde se va, proyectada a la pantalla
+const _p = new THREE.Vector3(), _q = new THREE.Vector3();
+function pintarFlecha() {
+  const ver = estado === 'enganchado' && !!pelea && pelea.modo === 'tira';
+  if (elFlecha.hidden === ver) elFlecha.hidden = !ver;
+  if (!ver) return;
+  camara.updateMatrixWorld();
+  _p.set(pelea.p.x, 0.3, pelea.p.z).project(camara);
+  _q.set(pelea.p.x + pelea.vx * 0.6, 0.3, pelea.p.z + pelea.vz * 0.6).project(camara);
+  const W = window.innerWidth, H = window.innerHeight;
+  const ang = Math.atan2(-(_q.y - _p.y) * H, (_q.x - _p.x) * W);
+  const sx = clamp((_p.x + 1) / 2 * W + Math.cos(ang) * 44, 40, W - 40);
+  const sy = clamp((1 - _p.y) / 2 * H + Math.sin(ang) * 44, 80, H - 170);
+  elFlecha.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%) rotate(${ang}rad)`;
+}
+for (const m of [10, 20, 30, 40]) {
+  const x = (m - R_MIN) / (R_MAX - R_MIN) * 100;
+  const s = document.createElement('span'); s.style.left = x + '%'; s.textContent = m + ' m'; $('#marcas').appendChild(s);
+  const tic = document.createElement('i'); tic.className = 'tic'; tic.style.left = x + '%'; elBarra.appendChild(tic);
+}
+// la barra de tensión tiene tres juegos de marcas: clavar (boya en el agua), asusta (si hay un pez cerca) y floja / se corta (pelea)
+const marcasModo = { agua: [], cerca: [], pelea: [] };
+function marcaTension(modo, valor, texto, clase) {
+  const x = valor / T_MAX * 100;
+  const s = document.createElement('span'); s.style.left = x + '%'; s.textContent = texto; $('#marcasT').appendChild(s);
+  const tic = document.createElement('i'); tic.className = 'tic ' + clase; tic.style.left = x + '%'; elBarraT.appendChild(tic);
+  marcasModo[modo].push(s, tic);
+}
+marcaTension('agua', UMBRAL, 'clava', 'umbral');
+marcaTension('cerca', SUSTO, 'asusta', 'rotura');
+marcaTension('pelea', T_FLOJA, 'floja', 'umbral');
+marcaTension('pelea', T_ROTURA, 'se corta', 'rotura');
+let modoMedidor = null, distMostrada = null;
+function pintarModoMedidor(modo, cerca) {
+  const clave = modo + (cerca ? '+cerca' : '');
+  if (clave === modoMedidor) return;
+  modoMedidor = clave;
+  for (const [k, els] of Object.entries(marcasModo)) for (const el of els) el.hidden = !(k === modo || (k === 'cerca' && cerca));
+}
+const CLIC = tactil ? 'Tocá' : 'Click derecho', CLIC_SOLTAR = tactil ? 'Tocá' : 'Click';
+const PISTAS = {
+  listo: `<kbd>${CLIC}</kbd> cargar` + (tactil ? ' · arrastrá para apuntar' : ' · el mouse apunta'),
+  cargando: `<kbd>${CLIC_SOLTAR}</kbd> soltar`,
+  lleno: `<kbd>${CLIC_SOLTAR}</kbd> soltar · carga completa`,
+  lanzando: '', vuelo: '',
+  agua: tactil ? '<kbd>Arrastrá hacia arriba</kbd> tirón · <kbd>Cobrar</kbd> recoger' : '<kbd>Click izquierdo</kbd> y subí el mouse · <kbd>Mantené click derecho</kbd> recoger',
+  enganchado: tactil ? '<kbd>Arrastrá contra la flecha</kbd> · <kbd>Soltar</kbd> afloja · <kbd>Cobrar</kbd> cuando cede'
+    : '<kbd>Click izquierdo</kbd> y tirá contra la flecha · <kbd>Q</kbd> soltar tensión · <kbd>Mantené click derecho</kbd> cobrar',
+  recogiendo: ''
+};
+let pistaActual = null;
+function pintarPista(clave) { if (clave !== pistaActual) { pistaActual = clave; elPista.innerHTML = PISTAS[clave]; } }
+function pintarLectura(record) {
+  elDist.innerHTML = (ultimo ? fmt(ultimo) : '—') + '<small>m</small>'; distMostrada = null;
+  elMejor.textContent = mejor ? fmt(mejor) + ' m' : '—';
+  elPeces.textContent = capturas;
+  elDist.classList.toggle('nuevo', !!record);
+  if (record) setTimeout(() => elDist.classList.remove('nuevo'), 1400);
+}
+
+/* ——— Panel de cámara ——— */
+const btnCamara = $('#btnCamara'), panel = $('#panelCamara'), btnAyuda = $('#btnAyuda'), panelAyuda = $('#panelAyuda');
+const btnTerminar = $('#btnTerminar'), panelFin = $('#panelFin');
+// los paneles comparten el lugar: abrir uno cierra los otros
+const botonDe = new Map([[panel, btnCamara], [panelAyuda, btnAyuda], [panelFin, btnTerminar]]);
+function mostrarPanel(p, ver) {
+  p.hidden = !ver;
+  botonDe.get(p).setAttribute('aria-expanded', String(ver));
+  if (ver) for (const otro of botonDe.keys()) if (otro !== p && !otro.hidden) mostrarPanel(otro, false);
+  if (p === panelAyuda && ver) med.ayudaAbierta = true;
+  if (p === panelAyuda && !ver) { try { localStorage.setItem('pesca.ayudaVista', '1'); } catch (e) { /* sin almacenamiento: vuelve a aparecer la próxima vez */ } }
+  if (p === panelFin && ver) pintarResumen();
+}
+btnCamara.addEventListener('click', () => mostrarPanel(panel, panel.hidden));
+btnAyuda.addEventListener('click', () => mostrarPanel(panelAyuda, panelAyuda.hidden));
+btnTerminar.addEventListener('click', () => mostrarPanel(panelFin, panelFin.hidden));
+$('#btnEntendido').addEventListener('click', () => mostrarPanel(panelAyuda, false));
+$('#btnSeguir').addEventListener('click', () => mostrarPanel(panelFin, false));
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const p of botonDe.keys()) if (!p.hidden) mostrarPanel(p, false); });
+
+/* ——— Modo prueba: sin panel de cámara, con aviso de qué se mide y un final con resumen y opinión ——— */
+if (MODO_PRUEBA) {
+  btnCamara.hidden = true; btnTerminar.hidden = false;
+  for (const el of document.querySelectorAll('.solo-prueba')) el.hidden = false;
+}
+let nota = null;
+for (let n = 1; n <= 5; n++) {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = n; b.setAttribute('aria-pressed', 'false');
+  b.setAttribute('aria-label', n + (n === 1 ? ': nada divertido' : n === 5 ? ': muy divertido' : ''));
+  b.addEventListener('click', () => { nota = n; for (const o of $('#notas').children) o.setAttribute('aria-pressed', String(o === b)); });
+  $('#notas').appendChild(b);
+}
+function pintarResumen() {
+  const min = Math.floor(tiempo / 60), seg = Math.round(tiempo % 60);
+  const filas = [
+    ['Tiempo jugando', min ? `${min} min ${seg} s` : `${seg} s`],
+    ['Lances', med.lances], ['Mejor lance', mejor ? fmt(mejor) + ' m' : '—'],
+    ['Mordidas', med.mordidas], ['Enganchados', med.enganchados], ['Capturados', capturas]
+  ];
+  const dl = $('#resumen'); dl.textContent = '';
+  for (const [k, v] of filas) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); }
+}
+$('#btnEnviar').addEventListener('click', async () => {
+  med.diversion = nota; med.comentario = $('#comentario').value.slice(0, 1000); med.terminada = true;
+  if (!window.__guardarPartida) { $('#estadoEnvio').textContent = 'Esta versión no guarda resultados.'; return; }
+  $('#estadoEnvio').textContent = 'Enviando…';
+  await guardarMed();
+  $('#estadoEnvio').textContent = '¡Gracias! Quedó guardado. Podés seguir jugando.';
+});
+{ let vista = false; try { vista = localStorage.getItem('pesca.ayudaVista') === '1'; } catch (e) { /* sin almacenamiento */ } if (!vista) mostrarPanel(panelAyuda, true); }
+const salidas = {}, entradas = {}, tocada = { reposo: false, carga: false };
+for (const p of PERILLAS) {
+  const fila = document.createElement('div'); fila.className = 'perilla';
+  fila.innerHTML = `<label for="s-${p.k}">${p.nombre}</label><output id="o-${p.k}" for="s-${p.k}"></output><input type="range" id="s-${p.k}" min="${p.min}" max="${p.max}" step="${p.step}">`;
+  $('#perillas').appendChild(fila);
+  entradas[p.k] = fila.querySelector('input'); salidas[p.k] = fila.querySelector('output');
+  entradas[p.k].addEventListener('input', () => {
+    camCfg[camEditada][p.k] = Number(entradas[p.k].value); salidas[p.k].textContent = camCfg[camEditada][p.k] + p.u;
+    tocada[camEditada] = true; pintarFuente();
+  });
+}
+const botonesCam = {};
+for (const [clave, c] of Object.entries(CAMARAS)) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'preset'; b.textContent = c.nombre;
+  b.addEventListener('click', () => editarCamara(clave)); $('#presets').appendChild(b); botonesCam[clave] = b;
+}
+function pintarFuente() {
+  $('#fuenteCamara').textContent = tocada[camEditada] ? 'Ajustada a mano: copiá los valores y pasáselos al Game Design Master. «Valores del GDM» la devuelve.' : CAMARAS[camEditada].fuente;
+}
+function editarCamara(clave) {
+  camEditada = clave;
+  for (const [k, b] of Object.entries(botonesCam)) b.setAttribute('aria-pressed', String(k === clave));
+  for (const p of PERILLAS) { entradas[p.k].value = camCfg[clave][p.k]; salidas[p.k].textContent = camCfg[clave][p.k] + p.u; }
+  pintarFuente();
+}
+editarCamara('reposo');
+$('#btnGdm').addEventListener('click', () => {
+  for (const p of PERILLAS) camCfg[camEditada][p.k] = CAMARAS[camEditada][p.k];
+  tocada[camEditada] = false; editarCamara(camEditada);
+});
+$('#btnCopiar').addEventListener('click', (e) => {
+  const linea = (c) => `brazo ${c.brazo} cm · hombro ${c.lateral} cm · arriba ${c.alto} cm · inclinación ${c.pitch}° · FOV ${c.fov}° · pivote ${c.pivote} cm`;
+  const b = e.currentTarget, txt = `Cámara de pesca — en reposo: ${linea(camCfg.reposo)}. Cargando: ${linea(camCfg.carga)}.`;
+  const listo = (m) => { b.textContent = m; setTimeout(() => { b.textContent = 'Copiar valores'; }, 1600); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => listo('Copiado'), () => { $('#fuenteCamara').textContent = txt; listo('Seleccioná el texto'); });
+  else { $('#fuenteCamara').textContent = txt; listo('Seleccioná el texto'); }
+});
+$('#btnSonido').addEventListener('click', (e) => {
+  mudo = !mudo; e.currentTarget.setAttribute('aria-pressed', String(!mudo)); e.currentTarget.textContent = mudo ? 'Sonido: no' : 'Sonido: sí';
+});
+
+/* ——— La cámara: un SpringArm de Unreal sin colisión ——— */
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(), _piv = new THREE.Vector3();
+function colocarCamara(dt) {
+  const k = clamp(dt * 12, 0, 1);         // FInterpTo, rapidez 12
+  const obj = estado === 'cargando' ? camCfg.carga : camCfg.reposo;
+  for (const p of PERILLAS) camVivo[p.k] += (obj[p.k] - camVivo[p.k]) * k;
+  camYaw += (yaw - camYaw) * clamp(dt * 8, 0, 1);
+  const pitch = rad(camVivo.pitch);
+  _f.set(-Math.sin(camYaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(camYaw) * Math.cos(pitch));
+  _r.set(Math.cos(camYaw), 0, -Math.sin(camYaw));
+  _u.crossVectors(_r, _f);
+  _piv.copy(pj.position); _piv.y += camVivo.pivote / 100;
+  camara.position.copy(_piv).addScaledVector(_f, -camVivo.brazo / 100).addScaledVector(_r, camVivo.lateral / 100).addScaledVector(_u, camVivo.alto / 100);
+  camara.lookAt(_v.copy(camara.position).add(_f));
+  golpeFov *= Math.exp(-dt * 5);
+  const vfov = 2 * Math.atan(Math.tan(rad(camVivo.fov + golpeFov) / 2) / camara.aspect) * 180 / Math.PI;
+  camara.fov = Math.min(vfov, 78); camara.updateProjectionMatrix();
+  boveda.position.copy(camara.position);
+}
+
+function ajustar() { const w = window.innerWidth, h = window.innerHeight; renderer.setSize(w, h, false); camara.aspect = w / h; camara.updateProjectionMatrix(); }
+window.addEventListener('resize', ajustar); ajustar();
+
+/* ——— Cuadro a cuadro ——— */
+let tPrev = 0, tiempo = 0;
+function cuadro(ms) {
+  const dt = clamp((ms - tPrev) / 1000 || 0, 1 / 240, 1 / 20); tPrev = ms; tiempo += dt;
+  const t = tiempo;
+
+  // apuntar: sólo con el sedal recogido
+  yaw += (yawObj - yaw) * clamp(dt * 8, 0, 1);
+  pj.rotation.y = yaw;
+
+  // la caña
+  if (estado === 'cargando') {
+    tCarga = (performance.now() - inicioCarga) / 1000;   // reloj real: la carga no depende de los cuadros por segundo
+    const u = Math.min(1, tCarga / T_CARGA); carga = 1 - (1 - u) * (1 - u);
+    angCana = lerp(ANG_REPOSO, ANG_ATRAS, carga) + (u >= 1 ? Math.sin(t * 46) * 0.014 : 0);
+  } else if (barrido) {
+    barrido.t += dt; const u = Math.min(1, barrido.t / barrido.dur);
+    angCana = lerp(barrido.desde, ANG_ADELANTE, u * u);
+    if (!barrido.solto && (angCana <= ANG_SUELTA || u >= 0.6)) { barrido.solto = true; lanzar(); }
+    if (u >= 1) { asentar = { desde: angCana, t: 0, dur: 0.7 }; barrido = null; }
+  } else if (asentar) {
+    asentar.t += dt; const u = Math.min(1, asentar.t / asentar.dur);
+    angCana = lerp(asentar.desde, ANG_REPOSO, 1 - Math.pow(1 - u, 3));
+    if (u >= 1) asentar = null;
+  } else {
+    // con el pez: la caña arriba si la aguantás, más baja si dejás que el freno trabaje; tiembla con la tensión
+    const objetivo = estado === 'enganchado' ? (soltando ? rad(-50) : gesto ? rad(-28) : rad(-42)) + Math.sin(t * 11) * 0.015 * (1 + tension) : ANG_REPOSO + Math.sin(t * 1.3) * 0.012;
+    angBase += (objetivo - angBase) * clamp(dt * 8, 0, 1);
+    angCana = angBase;
+  }
+  // el tirón: mientras dura el gesto la caña sigue al mouse; al soltar, vuelve sola
+  if (gesto) angTiron += (clamp(gesto.d / RECORRIDO, 0, 1) * ANG_TIRON - angTiron) * clamp(dt * 25, 0, 1);
+  else angTiron *= Math.exp(-dt * 7);
+  angCana += angTiron;
+  const w = (angCana - angPrev) / dt; angPrev = angCana;
+  const armT = clamp((angCana - ANG_REPOSO) / (ANG_ATRAS - ANG_REPOSO), -0.3, 1);
+  brazoDer.rotation.set(lerp(0.95, 2.35, armT), 0, 0.15);
+  torso.rotation.x = armT >= 0 ? armT * 0.1 : armT * 0.25;
+  // con el pez, el cuerpo y la caña barren hacia el lado al que tirás el mouse
+  const ladoObj = estado === 'enganchado' && gesto ? -clamp(gesto.nx / RECORRIDO, -1, 1) * 0.45 : 0;
+  angLado += (ladoObj - angLado) * clamp(dt * 12, 0, 1);
+  torso.rotation.y = angLado;
+  capa.rotation.x = 0.04 + Math.sin(t * 1.7) * 0.02 + Math.max(0, -w) * 0.004;
+  mano.set(0, -0.56, 0).applyEuler(brazoDer.rotation).add(brazoDer.position); mano.x += 0.03;
+  cana.position.copy(mano);
+  cana.rotation.set(angCana, 0, -0.1 - 0.25 * Math.max(0, armT));   // en la carga se abre hacia afuera, lejos de la cámara
+  // lo que tira de la punta: el sedal suelto, el pez enganchado, el pez que traés
+  const tirando = estado === 'agua' ? 0.02 : estado === 'enganchado' ? (0.02 + tension * 0.05) * (1 + 0.15 * Math.sin(t * 13)) : (estado === 'recogiendo' && recogida.conPez ? 0.06 : 0);
+  for (let i = 0; i < N_SEG; i++) {
+    const f = flex[i], peso = (i + 1) / N_SEG;
+    const objetivo = -w * 0.0065 * peso + 0.03 * Math.sin(angCana) * peso - tirando * peso;
+    f.v += (520 * (objetivo - f.a) - 11 * f.v) * dt; f.a += f.v * dt;
+    segs[i].rotation.x = f.a;
+  }
+  pj.updateMatrixWorld(true);
+  punta.getWorldPosition(tip);
+  cobrando = ((botones & 2) !== 0 || cobrandoTactil) && conLinea();
+  soltando = (teclaQ || soltandoTactil) && estado === 'enganchado';
+  if (soltando && !soltandoAntes && peleaMed) peleaMed.usosQ++;
+  soltandoAntes = soltando;
+  if (estado === 'enganchado') pelear(dt, t);
+  if (estado === 'agua' && cobrando) {   // recoger la boya sin pez: viene hacia vos y, a 3 m, sale del agua
+    const rx = pj.position.x - enAgua.ox, rz = pj.position.z - enAgua.oz, rd = Math.hypot(rx, rz), paso = Math.min(VEL_RECOGER * dt, rd);
+    enAgua.ox += rx / rd * paso; enAgua.oz += rz / rd * paso;
+    acumClic += paso; for (let n = 0; acumClic > 0.35 && n < 3; n++) { acumClic -= 0.35; sonClic(0.035); }
+    if (t - (enAgua.estela || 0) > 0.22) { enAgua.estela = t; anillo(enAgua.x, enAgua.z, 0, 0.5, 0.8, 0.3); }
+    if (rd <= 3.2) recoger();
+  }
+  actualizarPez(dt, t);
+
+  // el señuelo
+  let comba = 0;
+  if (estado === 'listo' || estado === 'cargando' || estado === 'lanzando') {
+    const am = Math.pow(0.4, dt);
+    const vx = (se.p.x - se.prev.x) * am, vy = (se.p.y - se.prev.y) * am, vz = (se.p.z - se.prev.z) * am;
+    se.prev.copy(se.p); se.p.x += vx; se.p.y += vy - G * dt * dt; se.p.z += vz;
+    _v.copy(se.p).sub(tip); const d = _v.length();
+    if (d > L_COLGANTE) se.p.copy(tip).addScaledVector(_v, L_COLGANTE / d);
+  } else if (estado === 'vuelo') {
+    vuelo.t += dt; const tt = Math.min(vuelo.t, vuelo.T);
+    se.p.set(vuelo.p0.x + vuelo.vx * tt, vuelo.p0.y + vuelo.vy * tt - 0.5 * G * tt * tt, vuelo.p0.z + vuelo.vz * tt);
+    const largo = tip.distanceTo(se.p); acumClic += Math.max(0, largo - lineaPrev); lineaPrev = largo;
+    for (let n = 0; acumClic > 0.7 && n < 3; n++) { acumClic -= 0.7; sonClic(0.07); }
+    comba = 0.04 * largo;
+    if (vuelo.t >= vuelo.T) caer(t);
+  } else if (estado === 'agua' || estado === 'enganchado') {
+    const k = clamp(dt * (estado === 'enganchado' ? 10 : 14), 0, 1);   // la boya va hacia donde la llevan el tirón o el pez
+    enAgua.x += (enAgua.ox - enAgua.x) * k; enAgua.z += (enAgua.oz - enAgua.z) * k;
+    const dx = Math.sin(t * 0.7 + enAgua.t0) * 0.06, dz = Math.cos(t * 0.5) * 0.05;
+    se.p.set(enAgua.x + dx, olas(enAgua.x + dx, enAgua.z + dz, t) + 0.03 - hundirVis, enAgua.z + dz);
+    enAgua.tAnillo -= dt;
+    if (enAgua.tAnillo <= 0 && hundirVis < 0.03) { enAgua.tAnillo = 1.6 + azar() * 0.9; anillo(se.p.x, se.p.z, 0, 0.9, 1.6, 0.35); }
+    holgura = gesto && gesto.d > 0.01 ? Math.min(holgura, 0.15) : holgura + (1 - holgura) * clamp(dt * 1.5, 0, 1);   // tirando, el sedal va tenso
+    const largo = tip.distanceTo(se.p);
+    comba = estado !== 'enganchado' ? (0.2 * largo + 0.3) * holgura
+      : tension < T_FLOJA ? (0.03 + (T_FLOJA - tension) * 0.8) * largo : 0.012 * largo;   // con el pez: tenso, o colgando si se afloja
+  } else if (estado === 'recogiendo') {
+    recogida.t += dt; const u = Math.min(1, recogida.t / recogida.dur), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+    const x0 = se.p.x, z0 = se.p.z;
+    const x = lerp(recogida.desde.x, tip.x, e), z = lerp(recogida.desde.z, tip.z, e);
+    const yAgua = olas(x, z, t) + 0.03;
+    se.p.set(x, u < 0.85 ? yAgua : lerp(yAgua, tip.y - L_COLGANTE, (u - 0.85) / 0.15), z);
+    acumClic += Math.hypot(x - x0, z - z0);
+    for (let n = 0; acumClic > 0.35 && n < 3; n++) { acumClic -= 0.35; sonClic(0.035); }
+    if (u < 0.85 && t - recogida.ultimoAnillo > 0.22) { recogida.ultimoAnillo = t; anillo(x, z, 0, 0.5, 0.8, 0.3); }
+    if (recogida.conPez && u >= 0.85 && !recogida.sacado) sacarPez();
+    comba = (recogida.conPez && u < 0.85 ? 0.015 : 0.08) * tip.distanceTo(se.p);
+    if (u >= 1) { if (recogida.sacado) capturar(); estado = 'listo'; recogida = null; se.prev.copy(se.p); }
+  }
+  senuelo.position.copy(se.p);
+  haloSen.position.copy(se.p);
+  const sHalo = clamp(camara.position.distanceTo(se.p) * 0.022, 0.22, 1.1);
+  haloSen.scale.set(sHalo, sHalo, 1);
+  haloSen.material.opacity = (estado === 'agua' ? 0.7 + Math.sin(t * 3) * 0.15 : 0.85) * clamp(1 - hundirVis * 3, 0.25, 1);
+  if (pez.colgado > 0) {   // el pez recién sacado, colgando del sedal hasta el próximo lance
+    pez.colgado = estado === 'cargando' ? 0 : pez.colgado - dt;
+    pezColgado.visible = pez.colgado > 0;
+    pezColgado.position.copy(se.p);
+    pezColgado.rotation.set(0, yaw + Math.PI / 2, Math.sin(t * 17) * 0.4 * Math.min(1, pez.colgado));
+  }
+  tenderLinea(tip, se.p, comba, t);
+
+  // el mundo
+  moverAgua(t);
+  for (const b of boyas) { b.position.y = olas(b.position.x, b.position.z, t) - 0.05; b.rotation.z = Math.sin(t * 1.1 + b.position.z) * 0.06; }
+  for (const i of islas) i.isla.position.y = i.y + Math.sin(t * 0.25 + i.fase) * 1.2;
+  for (let i = anillos.length - 1; i >= 0; i--) {
+    const a = anillos[i]; a.t += dt; if (a.t < 0) continue;
+    const u = a.t / a.vida;
+    if (u >= 1) { escena.remove(a.m); a.m.material.dispose(); anillos.splice(i, 1); continue; }
+    const s = lerp(0.15, a.tam, 1 - (1 - u) * (1 - u));
+    a.m.visible = true; a.m.scale.set(s, 1, s); a.m.position.y = olas(a.m.position.x, a.m.position.z, t) + 0.02; a.m.material.opacity = a.opac * (1 - u);
+  }
+  for (let i = gotas.length - 1; i >= 0; i--) {
+    const g = gotas[i]; g.v.y -= G * dt; g.m.position.addScaledVector(g.v, dt);
+    if (g.m.position.y < olas(g.m.position.x, g.m.position.z, t) && g.v.y < 0) { escena.remove(g.m); gotas.splice(i, 1); }
+  }
+
+  colocarCamara(dt);
+
+  // HUD
+  pico = Math.max(0, pico - CAIDA_TENSION * dt);
+  if (estado !== 'enganchado') tension = pico;
+  const verCarga = !conLinea(), verTension = conLinea(), verCobrar = tactil && conLinea(), verSoltar = tactil && estado === 'enganchado';
+  if (elMedCarga.hidden === verCarga) elMedCarga.hidden = !verCarga;
+  if (elMedTension.hidden === verTension) elMedTension.hidden = !verTension;
+  if (elCobrar.hidden === verCobrar) elCobrar.hidden = !verCobrar;
+  if (elSoltar.hidden === verSoltar) elSoltar.hidden = !verSoltar;
+  pintarFlecha();
+  if (verTension) {
+    // un pez que se acerca o pica se asusta si la tensión pasa SUSTO: se avisa, y la barra se pone roja antes de llegar
+    const pezCerca = estado === 'agua' && (pez.fase === 'acercando' || pez.fase === 'picando');
+    pintarModoMedidor(estado === 'enganchado' ? 'pelea' : 'agua', pezCerca);
+    elCerca.classList.toggle('visible', pezCerca);
+    elBarraT.classList.toggle('alerta', pezCerca && tension > SUSTO * 0.6);
+    elRellenoT.style.width = (Math.min(tension, T_MAX) / T_MAX * 100) + '%';
+    elBarraT.classList.toggle('clavado', estado === 'agua' && tension >= UMBRAL);
+    elBarraT.classList.toggle('peligro', estado === 'enganchado' && tension > T_ROTURA - 0.15);
+    elBarraT.classList.toggle('floja', estado === 'enganchado' && !!pelea && pelea.tFloja > 0.5);
+  }
+  if (estado === 'enganchado' && pelea) {   // durante la pelea, el número grande es la distancia del pez
+    const txt = fmt(Math.hypot(pelea.p.x - pj.position.x, pelea.p.z - pj.position.z));
+    if (txt !== distMostrada) { distMostrada = txt; elDist.innerHTML = txt + '<small>m</small>'; }
+  }
+  if (avisoT > 0) { avisoT -= dt; if (avisoT <= 0) elAviso.classList.remove('visible'); }
+  if (estado === 'cargando') {
+    elRelleno.style.width = (carga * 100) + '%';
+    const lleno = tCarga >= T_CARGA; elBarra.classList.toggle('lleno', lleno);
+    elFantasma.hidden = true; pintarPista(lleno ? 'lleno' : 'cargando');
+  } else {
+    if (elBarra.classList.contains('lleno')) elBarra.classList.remove('lleno');
+    if (estado === 'lanzando' || estado === 'vuelo') { elRelleno.style.width = (cargaSoltada * 100) + '%'; }
+    else if (elRelleno.style.width !== '0%') { elRelleno.style.width = '0%'; if (cargaSoltada) { elFantasma.style.left = (cargaSoltada * 100) + '%'; elFantasma.hidden = false; } }
+    pintarPista(estado);
+  }
+
+  renderer.render(escena, camara);
+  requestAnimationFrame(cuadro);
+}
+
+const hot = window.claude && window.claude.hot;
+if (hot && hot.snapshot) hot.snapshot(() => ({ mejor, capturas }));
+const arrancar = (data) => { mejor = (data && data.mejor) || 0; capturas = (data && data.capturas) || 0; pintarLectura(false); requestAnimationFrame((ms) => { tPrev = ms; cuadro(ms); }); };
+if (hot && hot.ready) hot.ready(arrancar); else arrancar((hot && hot.data) || {});
+})();
+</script>
+
+</body>
+</html>
