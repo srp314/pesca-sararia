@@ -59,6 +59,18 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
 .panel.nombre{top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(340px,calc(100% - 32px))}
 .panel input[type=text]{width:100%;box-sizing:border-box;background:rgba(13,10,36,.6);color:var(--tinta);border:1px solid var(--borde);border-radius:3px;padding:9px;font:15px var(--f-texto)}
 .ranking{width:min(340px,calc(100% - 32px))}
+.pesquero{width:min(360px,calc(100% - 32px))}
+.lugares{display:flex;flex-direction:column;gap:8px}
+.lugares button{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;text-transform:none;letter-spacing:.02em;padding:10px 12px;font-weight:400;line-height:1.35}
+.lugares button b{font:400 16px var(--f-display);letter-spacing:.03em;text-transform:none}
+.lugares button span{font-size:12px;color:var(--bruma)}
+.lugares button[aria-pressed="true"]{border-color:var(--ambar)}
+.lugares button[aria-pressed="true"] b{color:var(--ambar)}
+.pestanas button{padding:7px 9px;font-size:10px}
+.pestanas button[aria-selected="true"]{border-color:var(--ambar);color:var(--ambar)}
+.especie{display:flex;flex-direction:column;gap:2px}
+.especie h3{margin:6px 0 2px;font:400 14px var(--f-display);letter-spacing:.03em;display:flex;justify-content:space-between;gap:8px}
+.especie h3 small{font:400 11px var(--f-texto);color:var(--bruma)}
 .tabla{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px;font-size:13px;counter-reset:pos}
 .tabla li{display:grid;grid-template-columns:1.6em 1fr auto;column-gap:8px;align-items:baseline;padding:4px 6px;border-radius:2px}
 .tabla li::before{counter-increment:pos;content:counter(pos);color:var(--bruma);font-family:var(--f-display)}
@@ -80,7 +92,7 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
 .perilla output{font-variant-numeric:tabular-nums;color:var(--celeste)}
 .perilla input{grid-column:1/-1;width:100%;margin:0;accent-color:var(--violeta)}
 .abajo{display:flex;flex-direction:column;align-items:center;gap:9px;text-shadow:0 1px 14px rgba(10,6,30,.85)}
-.lectura{display:flex;align-items:baseline;gap:18px}
+.lectura{display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;gap:6px 18px}
 .dist{font-family:var(--f-display);font-size:clamp(40px,8vw,64px);line-height:1;font-variant-numeric:tabular-nums;transition:color .5s}
 .dist small{font-size:.38em;margin-left:5px;color:var(--bruma)}
 .dist.nuevo{color:var(--ambar)}
@@ -130,6 +142,7 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
   <header class="arriba">
     <div class="marca"><b>Pesca</b><span id="subtitulo">Sararia · prototipo del lance</span></div>
     <div class="botones">
+      <button id="btnPesquero" type="button" aria-expanded="false" aria-controls="panelPesquero">Pesquero</button>
       <button id="btnSonido" type="button" aria-pressed="true">Sonido: sí</button>
       <button id="btnAyuda" type="button" aria-expanded="false" aria-controls="panelAyuda">Cómo jugar</button>
       <button id="btnRanking" type="button" aria-expanded="false" aria-controls="panelRanking" hidden>Ranking</button>
@@ -141,7 +154,7 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
     <h2>Cómo jugar</h2>
     <ol>
       <li><b>Lanzar.</b> <kbd>Click derecho</kbd> carga la caña y otro click la suelta: cuanto más cargás, más lejos. El mouse apunta.</li>
-      <li><b>Elegir.</b> Las sombras en el agua son peces: más grande la sombra, más grande el pez, y lejos hay más grandes. Tirá cerca de una, no encima: si cae arriba, se espanta.</li>
+      <li><b>Elegir.</b> Con <kbd>Pesquero</kbd> elegís el agua: cada una tiene sus peces. Las sombras son peces: más grande la sombra, más grande el pez, y lejos hay más grandes. Lejos también es más hondo (mirá <span class="ojo">Fondo</span> mientras cargás): unos viven en la orilla y otros en lo hondo. Tirá cerca de una sombra, no encima: si cae arriba, se espanta.</li>
       <li><b>Esperar.</b> Con <span class="ojo">Pez cerca</span>, no tires o tirá suave: si la tensión pasa «asusta», se va. Si la boya baja apenas, está picando: todavía no.</li>
       <li><b>Clavar.</b> Cuando la boya se hunde entera, <kbd>click izquierdo</kbd> y subí el mouse de golpe. Tenés menos de un segundo.</li>
       <li><b>Pelear.</b> Con flecha, corre: <kbd>click izquierdo</kbd> y tirá el mouse para el lado contrario. Sin flecha, descansa: <kbd>mantené click derecho</kbd> para cobrar. Barra roja: <kbd>mantené Q</kbd> para soltar tensión. Barra floja que titila: cobrá o se suelta. A 3 m es tuyo.</li>
@@ -158,10 +171,19 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
     <p class="fuente">Queda guardado en este navegador. Lo podés cambiar desde el ranking.</p>
     <div class="fila"><button id="btnNombre" type="button">Jugar</button></div>
   </section>
+  <section class="panel pesquero" id="panelPesquero" hidden aria-label="Dónde pescar">
+    <h2>¿Dónde pescás?</h2>
+    <p class="fuente">Cada agua tiene sus peces. Lejos del muelle es más hondo: unos viven en la orilla y otros en lo hondo.</p>
+    <div class="lugares" id="lugares"></div>
+  </section>
   <section class="panel ranking" id="panelRanking" hidden aria-label="Ranking de pesos">
     <h2>Ranking de pesos</h2>
-    <p class="fuente">El pez más pesado de cada jugador. Se actualiza solo cuando alguien saca uno.</p>
-    <ol class="tabla" id="listaRanking"></ol>
+    <div class="fila pestanas" id="pestanas"></div>
+    <div id="rankingGeneral">
+      <p class="fuente">El pez más pesado de cada jugador, de cualquier especie. Se actualiza solo cuando alguien saca uno.</p>
+      <ol class="tabla" id="listaRanking"></ol>
+    </div>
+    <div id="rankingEspecies" hidden></div>
     <p class="fuente" id="miRanking"></p>
     <div class="fila"><button id="btnCambiarNombre" type="button">Cambiar nombre</button></div>
   </section>
@@ -193,6 +215,7 @@ button[aria-expanded="true"],button[aria-pressed="true"].preset{border-color:var
       <div class="mejor">Mejor<b id="mejor">—</b></div>
       <div class="mejor">Peces<b id="peces">0</b></div>
       <div class="mejor">Más pesado<b id="pesado">—</b></div>
+      <div class="mejor">Fondo<b id="fondo">—</b></div>
     </div>
     <div class="medidor" id="medCarga">
       <div class="barra" id="barra"><div class="relleno" id="relleno"></div><div class="fantasma" id="fantasma" hidden></div></div>
@@ -222,6 +245,11 @@ try {
   // el ranking global: el pez más pesado de cada jugador (ranking/<jugador>), y una escucha en vivo de los primeros
   window.__guardarRanking = (id, datos) => fs.collection('ranking').doc(id).set(conHora(datos));
   window.__escucharRanking = (cb) => fs.collection('ranking').orderBy('pesoMax', 'desc').limit(15)
+    .onSnapshot((s) => cb(s.docs.map((d) => d.data())), () => cb(null));
+  // el ranking por especie (ronda 5): el más pesado de cada jugador en cada especie (rankingEspecie/<especie>_<jugador>).
+  // Se escucha entero (son pocos: jugadores × especies) y se agrupa en el juego, así no hace falta un índice compuesto.
+  window.__guardarRecordEspecie = (id, datos) => fs.collection('rankingEspecie').doc(id).set(conHora(datos));
+  window.__escucharRankingEspecies = (cb) => fs.collection('rankingEspecie').orderBy('pesoMax', 'desc').limit(1000)
     .onSnapshot((s) => cb(s.docs.map((d) => d.data())), () => cb(null));
 } catch (e) { console.warn('Sin conexión a Firestore:', e); }
 </script>
@@ -352,8 +380,9 @@ const aguaGeo = new THREE.PlaneGeometry(200, 200, 100, 100);
 aguaGeo.rotateX(-Math.PI / 2); aguaGeo.translate(0, 0, -80);
 const posA = aguaGeo.attributes.position, bordeA = new Float32Array(posA.count);
 for (let i = 0; i < posA.count; i++) { const x = posA.getX(i), z = posA.getZ(i); bordeA[i] = Math.max(suave(70, 99, Math.abs(x)), suave(-150, -179, z), suave(12, 19.5, z)); }
-escena.add(new THREE.Mesh(aguaGeo, phong(MAT_AGUA.color, MAT_AGUA)));
-const aguaLejos = poner(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshPhongMaterial(MAT_AGUA), 0, PISO_LEJANO, 0);
+const matAgua = phong(MAT_AGUA.color, MAT_AGUA), matAguaLejos = new THREE.MeshPhongMaterial(MAT_AGUA);   // el pesquero les cambia el color
+escena.add(new THREE.Mesh(aguaGeo, matAgua));
+const aguaLejos = poner(new THREE.PlaneGeometry(4000, 4000), matAguaLejos, 0, PISO_LEJANO, 0);
 aguaLejos.rotation.x = -Math.PI / 2;
 function moverAgua(t) {
   for (let i = 0; i < posA.count; i++) posA.setY(i, lerp(olas(posA.getX(i), posA.getZ(i), t), PISO_LEJANO, bordeA[i]));
@@ -518,56 +547,148 @@ const geoSombra = new THREE.PlaneGeometry(1.0, 0.5); geoSombra.rotateX(-Math.PI 
 const sombraPez = new THREE.Mesh(geoSombra, new THREE.MeshBasicMaterial({ map: TEX_SOMBRA, transparent: true, opacity: 0, depthWrite: false }));
 sombraPez.visible = false; escena.add(sombraPez);
 const pezColgado = new THREE.Group(); pezColgado.visible = false; escena.add(pezColgado);
+const escama = phong('#4fc6e0', { shininess: 80, specular: '#e0d4ff', emissive: '#14244a' });   // toma el color de la especie al engancharlo
 {
-  const escama = phong('#4fc6e0', { shininess: 80, specular: '#e0d4ff', emissive: '#14244a' });
   poner(new THREE.SphereGeometry(1, 14, 10), escama, 0, -0.24, 0, pezColgado).scale.set(0.075, 0.24, 0.035);
   poner(new THREE.ConeGeometry(0.08, 0.13, 4), phong('#7b5cff'), 0, -0.5, 0, pezColgado).scale.set(1, 1, 0.3);
   poner(new THREE.SphereGeometry(0.012, 6, 4), new THREE.MeshBasicMaterial({ color: '#0b0820' }), 0, -0.07, 0.03, pezColgado);
 }
 
-/* ——— El cardumen: peces que se ven nadar antes de tirar ———
-   La sombra dice el tamaño, y lejos del muelle hay más chances de grandes: elegir dónde tirar es parte del juego.
-   Pica el pez más cercano a la boya (dentro de R_ATRAE), antes cuanto más cerca; una boya que cae encima lo espanta.
-   Las especies son nombres de trabajo por su manera de pelear, no nombres del mundo de Sararia. */
-// Ronda 3: la fuerza es relativa y topa en 1 (por el tirador grande); con el sacudón, un pez solo nunca pasa ~1,1,
-// por debajo del límite de 1,35. Lo que corta es lo que suma el jugador (aguantar + cobrar + tirar). Los grandes se
-// distinguen por cuánto aguantan (más energía, peleas más largas), no por cortar solos: en la ronda 2, con fuerza
-// hasta 1,5, los 7 cortes del primer segundo y medio fueron todos de peces grandes.
-const ESPECIES = {
-  corredor: { nombre: 'corredor', fuerza: 0.9, aguante: 0.8, corrida: [0.8, 1.5], lados: [-1, 1, -1, 1, 0], picadas: [2, 3], ventana: 0.75, acerca: 2.6, nada: 0.9, kg: 0.8, salta: 0 },
-  tirador: { nombre: 'tirador', fuerza: 1.0, aguante: 1.35, corrida: [2.2, 3.8], lados: [0, 0, 0, -1, 1], picadas: [0, 1], ventana: 1.1, acerca: 1.4, nada: 0.45, kg: 1.4, salta: 0 },
-  saltador: { nombre: 'saltador', fuerza: 0.95, aguante: 1.0, corrida: [1.2, 2.4], lados: [-1, 0, 1], picadas: [1, 2], ventana: 0.9, acerca: 2.0, nada: 0.7, kg: 1.0, salta: 0.45 }
+/* ——— Los peces y los pesqueros (ronda 5) ———
+   PECES es la base de datos investigada: la fuente es peces.json y armar_web.py la copia acá (no editar el bloque a
+   mano). Lo que es dato del mundo real —dónde vive, cuánto pesa, cómo pica, cómo pelea— vive ahí; cómo un rasgo se
+   vuelve un número de pelea vive acá, en deJuego().
+   Los números de pelea quedan dentro de la envolvente que se ajustó en las rondas 1–4: la fuerza topa en 1 y, con el
+   sacudón, un pez solo nunca pasa ~1,1, debajo del límite de 1,35. Lo que corta es lo que suma el jugador (aguantar +
+   cobrar + tirar). Una especie se distingue por CÓMO pelea —corridas, saltos, irse al fondo, cuánto aguanta—, no por
+   cortar sola: en la ronda 2, con fuerza hasta 1,5, los 7 cortes del primer segundo y medio fueron de peces grandes. */
+const PECES = /*PECES*/[{"id":"pejerrey","nombre":"Pejerrey","agua":"laguna","profundidadM":[0.3,1.5],"zona":"media","prefiere":"indistinto","kgTipico":[0.2,0.6],"kgRecord":3.8,"pique":"tantea","toquesAntes":2,"corridas":"cortas","saltos":"nunca","fondo":false,"aguante":"bajo","nocturno":true,"color":"dorso azulado-pardo, flancos plateados con banda plateada de borde azul oscuro","rasgo":"pique sutil que desliza o acuesta la boya; boca frágil; anda en cardumen"},{"id":"tararira","nombre":"Tararira","agua":"laguna","profundidadM":[0.1,1.0],"zona":"superficie","prefiere":"orilla","kgTipico":[1,2],"kgRecord":7,"pique":"violento","toquesAntes":0,"insiste":true,"corridas":"cortas","saltos":"a veces","fondo":true,"aguante":"bajo","nocturno":true,"color":"verde oscuro arriba, amarillenta abajo, manchas negras en cuerpo y aletas","rasgo":"ataca con violencia y muchas veces erra, y vuelve a atacar; dientes que cortan la línea; se refugia en la vegetación"},{"id":"carpa","nombre":"Carpa","agua":"laguna","profundidadM":[0.5,3],"zona":"fondo","prefiere":"indistinto","kgTipico":[2,8],"kgRecord":32,"pique":"tantea","toquesAntes":2,"corridas":"largas","saltos":"nunca","fondo":true,"aguante":"alto","nocturno":true,"color":"escamas grandes brillantes en marrón, dorado o plateado","rasgo":"desconfiada, toma y escupe; una vez clavada hace corridas sostenidas en todas direcciones; las burbujas la delatan"},{"id":"bagresapo","nombre":"Bagre sapo","agua":"laguna","profundidadM":[0.3,3],"zona":"fondo","prefiere":"orilla","kgTipico":[0.5,2],"kgRecord":4.0,"pique":"franco","toquesAntes":0,"corridas":"cortas","saltos":"nunca","fondo":true,"aguante":"bajo","nocturno":true,"color":"dorso y flancos plomizo-oliváceo a pardo negruzco, vientre blanco","rasgo":"pique como un frenazo; espinas pectorales y dorsal punzantes"},{"id":"dorado","nombre":"Dorado","agua":"rio","profundidadM":[1,6],"zona":"media","prefiere":"indistinto","kgTipico":[3,10],"kgRecord":25.28,"pique":"violento","toquesAntes":0,"corridas":"largas","saltos":"mucho","fondo":false,"aguante":"alto","nocturno":false,"color":"dorado metálico intenso, raya negra en la cola","rasgo":"saltos sacudiendo la cabeza para desprenderse; dientes que cortan la línea; boca dura"},{"id":"surubi","nombre":"Surubí pintado","agua":"rio","profundidadM":[3,15],"zona":"fondo","prefiere":"hondo","kgTipico":[5,20],"kgRecord":80,"pique":"tantea","toquesAntes":3,"corridas":"medias","saltos":"nunca","fondo":true,"aguante":"alto","nocturno":true,"color":"manchas y puntos negros sobre fondo gris plateado","rasgo":"toca la carnada varias veces y se la lleva suave; hay que dejarle la primera corrida; busca lo hondo y la estructura"},{"id":"boga","nombre":"Boga","agua":"rio","profundidadM":[0.8,10],"zona":"fondo","prefiere":"hondo","kgTipico":[1,3],"kgRecord":10,"pique":"tantea","toquesAntes":3,"corridas":"medias","saltos":"nunca","fondo":false,"aguante":"alto","nocturno":true,"color":"plateada con tonos dorados, vientre blanco","rasgo":"mordisquea y roba carnada; corre en zigzag sin dejarse arrimar; boca chica y frágil"},{"id":"pati","nombre":"Patí","agua":"rio","profundidadM":[3,15],"zona":"fondo","prefiere":"hondo","kgTipico":[2,8],"kgRecord":20,"pique":"franco","toquesAntes":1,"corridas":"cortas","saltos":"nunca","fondo":true,"aguante":"medio","nocturno":true,"color":"plateado o plomizo con manchas pardas redondas, vientre blanquecino","rasgo":"pelea pesada y con fuerza; boca que cede si se lo apura; aletas sin espinas"},{"id":"armado","nombre":"Armado común","agua":"rio","profundidadM":[2,10],"zona":"fondo","prefiere":"indistinto","kgTipico":[1,4],"kgRecord":4.5,"pique":"tantea","toquesAntes":2,"corridas":"cortas","saltos":"nunca","fondo":true,"aguante":"medio","nocturno":true,"color":"pardo con manchas oscuras en cuerpo y aletas","rasgo":"acorazado con placas óseas y espinas aserradas; gruñe al sacarlo del agua; anda en cardumen de noche"},{"id":"truchaarcoiris","nombre":"Trucha arcoíris","agua":"patagonia","profundidadM":[1,10],"zona":"media","prefiere":"indistinto","kgTipico":[1,3],"kgRecord":10,"pique":"franco","toquesAntes":0,"corridas":"medias","saltos":"mucho","fondo":false,"aguante":"medio","nocturno":false,"color":"plateada con banda lateral rosa-violácea irisada y puntos negros hasta la cola","rasgo":"salta mucho fuera del agua al sentir el anzuelo"},{"id":"truchamarron","nombre":"Trucha marrón","agua":"patagonia","profundidadM":[1,15],"zona":"fondo","prefiere":"indistinto","kgTipico":[1,4],"kgRecord":15,"pique":"franco","toquesAntes":0,"corridas":"cortas","saltos":"a veces","fondo":true,"aguante":"medio","nocturno":true,"color":"pardo dorado a oliváceo con manchas negras y rojas con halo claro","rasgo":"la más desconfiada; ataca en la pausa; corre a la estructura para cortar la línea; las grandes cazan de noche"},{"id":"perca","nombre":"Perca criolla","agua":"patagonia","profundidadM":[1,10],"zona":"fondo","prefiere":"indistinto","kgTipico":[0.5,2],"kgRecord":3,"pique":"franco","toquesAntes":1,"corridas":"cortas","saltos":"nunca","fondo":true,"aguante":"medio","nocturno":false,"color":"pardo dorado a verdoso o anaranjado con motas negras, vientre claro a naranja","rasgo":"nativa; aleta dorsal espinosa y preopérculo aserrado; sube a lo bajo vegetado antes de la luna llena"},{"id":"salmonencerrado","nombre":"Salmón encerrado","agua":"patagonia","profundidadM":[2,20],"zona":"media","prefiere":"hondo","kgTipico":[4,7],"kgRecord":13.4,"pique":"franco","toquesAntes":0,"corridas":"largas","saltos":"mucho","fondo":false,"aguante":"alto","nocturno":false,"color":"plateado, azulado o gris acerado con pocas manchas en forma de X","rasgo":"saltos espectaculares y corridas largas; devolución obligatoria en el Traful"},{"id":"corvinarubia","nombre":"Corvina rubia","agua":"mar","profundidadM":[1,5],"zona":"fondo","prefiere":"orilla","kgTipico":[0.5,2],"kgRecord":8,"pique":"franco","toquesAntes":1,"corridas":"medias","saltos":"nunca","fondo":true,"aguante":"medio","nocturno":true,"color":"plateada con reflejo dorado, dorso gris, rayas oscuras oblicuas","rasgo":"ronca: tamborilea con la vejiga natatoria; cabezazos en la puntera; espinas filosas"},{"id":"pescadilla","nombre":"Pescadilla de red","agua":"mar","profundidadM":[1,5],"zona":"media","prefiere":"indistinto","kgTipico":[0.3,1.5],"kgRecord":3,"pique":"violento","toquesAntes":0,"corridas":"cortas","saltos":"nunca","fondo":false,"aguante":"bajo","nocturno":true,"color":"plateada","rasgo":"pique violento y casi sin pelea; viene en cardumen, de a dos o tres"},{"id":"lenguado","nombre":"Lenguado","agua":"mar","profundidadM":[1,5],"zona":"fondo","prefiere":"orilla","kgTipico":[0.5,3],"kgRecord":10.7,"pique":"tantea","toquesAntes":3,"corridas":"cortas","saltos":"nunca","fondo":true,"aguante":"medio","nocturno":true,"color":"lado de los ojos marrón que cambia para camuflarse, lado ciego blanco","rasgo":"amasa la carnada antes de tragar; enterrado con sólo los ojos afuera; pelea fuerte al salir del agua"},{"id":"brotola","nombre":"Brótola","agua":"mar","profundidadM":[2,8],"zona":"fondo","prefiere":"hondo","kgTipico":[0.5,2],"kgRecord":2.5,"pique":"tantea","toquesAntes":1,"corridas":"cortas","saltos":"nunca","fondo":false,"aguante":"bajo","nocturno":true,"color":"castaña en el lomo, vientre pálido casi blanco, dorso jaspeado","rasgo":"el pez de la noche en las escolleras; pique sutil de un solo tirón; boca muy grande; no pelea"},{"id":"burriqueta","nombre":"Burriqueta","agua":"mar","profundidadM":[0.5,3],"zona":"fondo","prefiere":"orilla","kgTipico":[0.2,0.8],"kgRecord":1.1,"pique":"franco","toquesAntes":2,"corridas":"cortas","saltos":"nunca","fondo":false,"aguante":"bajo","nocturno":true,"color":"plateada grisácea","rasgo":"barbilla bajo la mandíbula ('perita') para buscar comida en la arena; varios tirones seguidos al picar"}]/*FIN PECES*/;
+// El color con que se pinta cada pez al sacarlo: decisión de arte, leída del aspecto que describe la base
+const COLORES = {
+  pejerrey: '#c6d4ff', tararira: '#6f8a3a', carpa: '#c79a4a', bagresapo: '#5b5a6e',
+  dorado: '#ffb547', surubi: '#8e93a6', boga: '#d9cf9a', pati: '#a3a9bf', armado: '#6e5640',
+  truchaarcoiris: '#e39ac8', truchamarron: '#b58a4e', perca: '#b8a24a', salmonencerrado: '#9fb3d9',
+  corvinarubia: '#e0bf73', pescadilla: '#d4dcf2', lenguado: '#8a7656', brotola: '#8b6e55', burriqueta: '#aeb3c2'
 };
+// Cada pesquero: su fondo (metros a 6 m del muelle y a 46 m, y la curva entre los dos: < 1 cae enseguida, > 1 cae
+// tarde), el color del agua y qué peces hay, con su peso relativo (cuántos de cada uno, no su probabilidad de picar).
+// Los fondos son decisión, salvo la laguna: la investigación dice que una laguna pampeana casi no se hace más honda al
+// alejarse (0,3 a 12 m por km; Chascomús, media 1,5 m), así que ahí lejos te saca del juncal, no te lleva a lo hondo.
+const PESQUEROS = {
+  laguna: { nombre: 'Laguna pampeana', corto: 'Laguna', texto: 'Agua quieta, baja y turbia. Casi no se hace más honda: lejos salís del juncal, no llegás a lo hondo.',
+    fondo: [1.0, 1.5], forma: 1, agua: '#2a2266', peces: { pejerrey: 5, tararira: 3, carpa: 2, bagresapo: 2 } },
+  rio: { nombre: 'Río Paraná', corto: 'Río', texto: 'Agua marrón; desde la barranca se hunde rápido hacia el canal, donde viven los grandes de fondo.',
+    fondo: [1.5, 14], forma: 0.8, agua: '#35235c', peces: { boga: 4, pati: 3, armado: 3, dorado: 2, surubi: 1 } },
+  patagonia: { nombre: 'Lago patagónico', corto: 'Patagonia', texto: 'Agua fría y clara, con veriles que caen enseguida a lo hondo.',
+    fondo: [1, 20], forma: 0.6, agua: '#14358a', peces: { truchaarcoiris: 5, truchamarron: 3, perca: 3, salmonencerrado: 1 } },
+  mar: { nombre: 'Muelle en el mar', corto: 'Mar', texto: 'Costa atlántica: arena con canaletas que baja de a poco.',
+    fondo: [2.5, 8], forma: 1.1, agua: '#1a2a70', peces: { pescadilla: 4, corvinarubia: 4, brotola: 3, burriqueta: 3, lenguado: 2 } }
+};
+const PESQUERO_INICIAL = 'laguna';
+function deJuego(p) {
+  const toques = Math.round(clamp(p.toquesAntes || 0, 0, 3));
+  // tantea: varios toques antes de tomar (no hay que clavar en los toques); franco: toma enseguida; violento: ataca de golpe
+  const pique = {
+    tantea: { picadas: [Math.max(1, toques - 1), Math.max(1, toques)], ventana: 0.8, acerca: 1.6 },
+    franco: { picadas: [0, Math.min(1, toques)], ventana: 1.0, acerca: 2.0 },
+    violento: { picadas: [0, 0], ventana: 0.8, acerca: 3.0 }
+  }[p.pique] || { picadas: [1, 2], ventana: 0.9, acerca: 2.0 };
+  return {
+    id: p.id, nombre: p.nombre,
+    fuerza: { cortas: 0.88, medias: 0.94, largas: 1.0 }[p.corridas] || 0.94,
+    aguante: { bajo: 0.85, medio: 1.05, alto: 1.35 }[p.aguante] || 1,
+    corrida: { cortas: [0.8, 1.5], medias: [1.2, 2.4], largas: [2.2, 3.8] }[p.corridas] || [1.2, 2.4],
+    // el que se va al fondo corre casi siempre para adentro; el de corridas cortas, de costado; el resto, a cualquier lado
+    lados: p.fondo ? [0, 0, 0, -1, 1] : p.corridas === 'cortas' ? [-1, 1, -1, 1, 0] : [-1, 0, 1],
+    picadas: pique.picadas, ventana: pique.ventana, acerca: pique.acerca,
+    nada: p.fondo ? 0.45 : p.zona === 'superficie' ? 0.9 : 0.7,
+    salta: { nunca: 0, 'a veces': 0.25, mucho: 0.55 }[p.saltos] || 0,
+    // el tamaño del cuerpo, para la sombra y el pez colgado: crece con el peso típico (un pejerrey ~0,65, un surubí ~1,6)
+    escala: clamp(0.65 + 0.22 * Math.log2(p.kgTipico[1]), 0.6, 1.7),
+    kgTipico: p.kgTipico, kgRecord: p.kgRecord, prof: p.profundidadM, prefiere: p.prefiere, insiste: !!p.insiste,
+    color: COLORES[p.id] || '#4fc6e0'
+  };
+}
+const ESPECIES = Object.fromEntries(PECES.map((p) => [p.id, deJuego(p)]));
+// el tamaño concuerda con el nombre: «trucha chica», «dorado chico» (las de esta base que terminan en -a son femeninas)
+const tamanoDe = (id, tamano) => (ESPECIES[id] && /a$/.test(ESPECIES[id].nombre.split(' ')[0]) && tamano !== 'grande' ? tamano.replace(/o$/, 'a') : tamano || '');
 const TAMANOS = {
   // la sombra va más grande que el pez: vista casi de canto desde el muelle, una forma plana se achica mucho
-  chico: { k: 0.75, aguante: 0.8, sombra: 1.0, escala: 0.8, kg: [0.3, 0.8] },
-  mediano: { k: 0.9, aguante: 1.0, sombra: 1.6, escala: 1.0, kg: [1.0, 2.4] },
-  grande: { k: 1.0, aguante: 1.3, sombra: 2.6, escala: 1.4, kg: [3.0, 6.0] }
+  chico: { k: 0.75, aguante: 0.8, sombra: 1.0, escala: 0.8 },
+  mediano: { k: 0.9, aguante: 1.0, sombra: 1.6, escala: 1.0 },
+  grande: { k: 1.0, aguante: 1.3, sombra: 2.6, escala: 1.4 }
 };
+// El peso sale de la especie: chico y mediano dentro de lo típico; grande, de lo típico alto hasta un 60 % más (nunca más que el 60 % del récord)
+function kgDe(esp, tamano) {
+  const [a, b] = esp.kgTipico, tope = Math.max(b, Math.min(esp.kgRecord * 0.6, b * 1.6));
+  const r = { chico: [a, a + 0.35 * (b - a)], mediano: [a + 0.35 * (b - a), a + 0.8 * (b - a)], grande: [a + 0.8 * (b - a), tope] }[tamano];
+  return lerp(r[0], r[1], azar());
+}
+let pesqueroId = PESQUERO_INICIAL;
+try { const g = localStorage.getItem('pesca.pesquero'); if (PESQUEROS[g]) pesqueroId = g; } catch (e) { /* sin almacenamiento: el inicial */ }
+let pesquero = PESQUEROS[pesqueroId];
+const rangos = {};   // de qué distancia a qué distancia del muelle el fondo le sirve a cada especie del pesquero
+function profundidad(d) { const [f0, f1] = pesquero.fondo; return f0 + (f1 - f0) * Math.pow(clamp((d - 6) / 40, 0, 1), pesquero.forma); }
+function rangoDe(esp) {
+  let r0 = null, r1 = null;
+  for (let d = 6; d <= 46; d++) { const p = profundidad(d); if (p >= esp.prof[0] && p <= esp.prof[1]) { if (r0 === null) r0 = d; r1 = d; } }
+  if (r0 === null) {   // en este pesquero ningún lugar le queda justo: va a lo más parecido
+    const obj = (esp.prof[0] + esp.prof[1]) / 2; let mejorD = 6, dif = Infinity;
+    for (let d = 6; d <= 46; d++) { const x = Math.abs(profundidad(d) - obj); if (x < dif) { dif = x; mejorD = d; } }
+    r0 = r1 = mejorD;
+  }
+  if (r1 - r0 < 8) { const m = (r0 + r1) / 2; r0 = Math.max(6, m - 4); r1 = Math.min(46, m + 4); }   // al menos 8 m de ancho, para que se mueva
+  // si la franja es ancha, el que prefiere la orilla se queda con la mitad cercana y el que prefiere lo hondo, con la lejana
+  const media = Math.max(8, (r1 - r0) / 2);
+  if (esp.prefiere === 'orilla' && r1 - r0 > 16) r1 = r0 + media;
+  else if (esp.prefiere === 'hondo' && r1 - r0 > 16) r0 = r1 - media;
+  return [r0, r1];
+}
+
+/* ——— El cardumen: peces que se ven nadar antes de tirar ———
+   La sombra dice el tamaño (y el cuerpo de la especie), y dentro de donde vive cada especie, lejos hay más chances de
+   grandes. Cada especie vive a la profundidad que le toca, y lejos del muelle es más hondo: elegir dónde tirar es
+   elegir qué pescar. Pica el pez más cercano a la boya (dentro de R_ATRAE), antes cuanto más cerca; una boya que cae
+   encima lo espanta. */
 const N_PECES = 10, R_ATRAE = 8, R_ESPANTA = 1.4;
 const cardumen = [];
-function lugarAlAzar(v) {   // en el agua de pesca: de 6 a 46 m del muelle, dentro de lo que se puede apuntar
-  const a = (azar() - 0.5) * 2 * rad(40), d = 6 + azar() * 40;
+function lugarAlAzar(v, rango) {   // dentro de lo que se puede apuntar y de la franja de la especie
+  const a = (azar() - 0.5) * 2 * rad(40), d = lerp(rango[0], rango[1], azar());
   v.set(pj.position.x - Math.sin(a) * d, 0, pj.position.z - Math.cos(a) * d);
   return d;
 }
-function tamanoSegun(d) {   // a 6 m: 5 % de grandes; a 44 m: 55 %
-  const g = 0.05 + 0.5 * clamp((d - 6) / 38, 0, 1), r = azar();
+function tamanoSegun(d, rango) {   // en el borde cercano de su franja: 5 % de grandes; en el lejano: 55 %
+  const g = 0.05 + 0.5 * clamp((d - rango[0]) / Math.max(1, rango[1] - rango[0]), 0, 1), r = azar();
   return r < g ? 'grande' : r < g + 0.35 ? 'mediano' : 'chico';
 }
-function especieAlAzar() { const r = azar(); return r < 0.4 ? 'corredor' : r < 0.72 ? 'saltador' : 'tirador'; }
+function especieAlAzar() {
+  const lista = Object.entries(pesquero.peces), total = lista.reduce((a, [, w]) => a + w, 0);
+  let r = azar() * total;
+  for (const [id, w] of lista) if ((r -= w) < 0) return id;
+  return lista[0][0];
+}
 function poblar(f) {
-  const d = lugarAlAzar(f.pos), T = TAMANOS[f.tamano = tamanoSegun(d)];
   f.especie = especieAlAzar();
-  f.kg = lerp(T.kg[0], T.kg[1], azar()) * ESPECIES[f.especie].kg;
+  const esp = ESPECIES[f.especie], rango = rangos[f.especie];
+  const d = lugarAlAzar(f.pos, rango), T = TAMANOS[f.tamano = tamanoSegun(d, rango)];
+  f.kg = kgDe(esp, f.tamano);
   f.rumbo = azar() * Math.PI * 2; f.estado = 'libre'; f.tCalma = 0; f.opac = 0; f.tOnda = azar() * 3;
-  f.sombra.scale.set(T.sombra, 1, T.sombra);
+  f.sombra.scale.set(T.sombra * esp.escala, 1, T.sombra * esp.escala);
+}
+// Cambiar de pesquero: el fondo, el color del agua y un cardumen nuevo
+function elegirPesquero(id) {
+  pesqueroId = id; pesquero = PESQUEROS[id];
+  for (const e of Object.keys(pesquero.peces)) rangos[e] = rangoDe(ESPECIES[e]);
+  matAgua.color.set(pesquero.agua); matAguaLejos.color.set(pesquero.agua);
+  for (const f of cardumen) { poblar(f); f.opac = 0; }
 }
 for (let i = 0; i < N_PECES; i++) {
   const sombra = new THREE.Mesh(geoSombra, new THREE.MeshBasicMaterial({ map: TEX_SOMBRA, transparent: true, opacity: 0, depthWrite: false }));
   sombra.visible = false; escena.add(sombra);
-  const f = { pos: new THREE.Vector3(), sombra }; poblar(f); f.opac = 0.45; cardumen.push(f);
+  cardumen.push({ pos: new THREE.Vector3(), sombra });
 }
+elegirPesquero(pesqueroId);
+for (const f of cardumen) f.opac = 0.45;
 function moverCardumen(dt, t) {
   for (const f of cardumen) {
     if (f.estado === 'ocupado') { f.sombra.visible = false; continue; }           // es el que está picando o peleando
@@ -578,8 +699,10 @@ function moverCardumen(dt, t) {
       f.tCalma = Math.max(0, f.tCalma - dt);
       f.rumbo += (azar() - 0.5) * dt * 1.4;                                          // deambula
       const dx = f.pos.x - pj.position.x, dz = f.pos.z - pj.position.z, d = Math.hypot(dx, dz), ang = Math.atan2(-dx, -dz);
-      if (d < 6 || d > 46 || Math.abs(ang) > rad(42)) {                               // y si se sale del agua de pesca, vuelve
-        const objetivo = Math.atan2(-(pj.position.z - 26 - f.pos.z), pj.position.x - f.pos.x);
+      const [r0, r1] = rangos[f.especie];
+      if (d < r0 - 1 || d > r1 + 1 || Math.abs(ang) > rad(42)) {                     // y si se sale de su franja o del agua de pesca, vuelve
+        const dm = (r0 + r1) / 2, am = clamp(ang, -rad(30), rad(30));
+        const objetivo = Math.atan2(-(pj.position.z - Math.cos(am) * dm - f.pos.z), pj.position.x - Math.sin(am) * dm - f.pos.x);
         const dif = Math.atan2(Math.sin(objetivo - f.rumbo), Math.cos(objetivo - f.rumbo));
         f.rumbo += clamp(dif, -1, 1) * dt * 1.5;
       }
@@ -588,7 +711,7 @@ function moverCardumen(dt, t) {
     f.opac += (0.7 - f.opac) * clamp(dt * 1.5, 0, 1);
     // cada tanto sube a la superficie y deja un anillo de su tamaño: se ve aunque la sombra quede de canto
     f.tOnda -= dt;
-    if (f.tOnda <= 0) { f.tOnda = 2 + azar() * 3; anillo(f.pos.x, f.pos.z, 0, 0.55 * TAMANOS[f.tamano].sombra, 1.3, 0.4); }
+    if (f.tOnda <= 0) { f.tOnda = 2 + azar() * 3; anillo(f.pos.x, f.pos.z, 0, 0.55 * TAMANOS[f.tamano].sombra * ESPECIES[f.especie].escala, 1.3, 0.4); }
     f.sombra.visible = true; f.sombra.material.opacity = f.opac;
     f.sombra.position.set(f.pos.x, olas(f.pos.x, f.pos.z, t) + 0.012, f.pos.z);
     f.sombra.rotation.y = f.rumbo + Math.sin(t * 6 + f.pos.x) * 0.1;
@@ -704,7 +827,7 @@ window.__pesca = () => ({ estado, fase: pez.fase, tension: r2(tension), capturas
   qUsada, avisosQ: med.avisosQ, aviso: elAviso.textContent,
   sedal: notaSedal ? { hz: Math.round(notaSedal.osc.frequency.value), vol: r2(notaSedal.gain.gain.value * 100) / 100, pan: notaSedal.pan ? r2(notaSedal.pan.pan.value) : null } : null,
   flecha: elFlecha.hidden ? null : { transform: elFlecha.style.transform.replace(/.*scale/, 'scale'), color: elFlecha.style.color },
-  pez: pez.especie ? { especie: pez.especie.nombre, tamano: pez.tamano, kg: r1(pez.kg) } : null, pesoMax: r1(pesoMax), lancesCerca: med.lancesCerca, ultimaCaida });
+  pez: pez.especie ? { especie: pez.especie.id, tamano: pez.tamano, kg: r1(pez.kg) } : null, pesoMax: r1(pesoMax), lancesCerca: med.lancesCerca, ultimaCaida });
 // para las pruebas automáticas: dónde está cada pez (distancia al muelle y ángulo para apuntar), y marcar la sesión como prueba
 window.__cardumen = () => cardumen.map((f) => ({ estado: f.estado, especie: f.especie, tamano: f.tamano, kg: r1(f.kg), rumbo: r2(f.rumbo), vel: ESPECIES[f.especie].nada * (f.tamano === 'grande' ? 0.8 : 1),
   x: r2(f.pos.x - pj.position.x), z: r2(f.pos.z - pj.position.z),
@@ -721,7 +844,7 @@ const tactil = window.matchMedia && matchMedia('(pointer: coarse)').matches;
    (window.__guardarPartida) la agrega sólo esa versión, así que acá guardarMed() no hace nada.
    Se guarda en momentos con sentido: el primer lance, cada 5 lances, cada pelea terminada, al terminar y al irse. */
 const MODO_PRUEBA = (document.querySelector('meta[name="pesca:modo"]') || {}).content === 'prueba';
-const VERSION_JUEGO = '2026-10-26a';     // se ve junto al título: cambiarla en cada publicación
+const VERSION_JUEGO = '2026-10-26b';     // se ve junto al título: cambiarla en cada publicación
 const r1 = (x) => Math.round(x * 10) / 10;
 const med = {
   sesion: Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
@@ -731,7 +854,7 @@ const med = {
   lances: 0, distancias: [], peces: 0, asustados: 0, mordidas: 0, seFueron: 0, enganchados: 0,
   reaccionMs: [], peleas: [], capturas: 0, diversion: null, comentario: '', terminada: false, estadoAlGuardar: '',
   avisosQ: 0, inactivoSeg: 0, pesoMax: 0, lancesCerca: 0, jugador: '', nombre: '',
-  mordidasAvisadas: 0, enganchesAvisados: 0
+  mordidasAvisadas: 0, enganchesAvisados: 0, pesquero: pesqueroId
 };
 let peleaMed = null, guardando = false, guardarDeNuevo = false, tMordida = 0, soltandoAntes = false;
 async function guardarMed() {
@@ -747,7 +870,7 @@ function finPelea(resultado) {
   if (!peleaMed) return;
   // por qué terminó: tensión máxima, tiempo en rojo, y hacia dónde corría (lado) y qué hacía (modo) en ese momento
   if (med.peleas.length < 100) med.peleas.push({ seg: r1(tiempo - peleaMed.t0), resultado, usosQ: peleaMed.usosQ, bien: r2(peleaMed.bien), mal: r2(peleaMed.mal), vuelta: r2(peleaMed.vuelta),
-    especie: peleaMed.especie, tamano: peleaMed.tamano, kg: peleaMed.kg, distIni: peleaMed.distIni, tensionMax: r2(peleaMed.tensionMax), rojoSeg: r1(peleaMed.rojoSeg),
+    especie: peleaMed.especie, pesquero: peleaMed.pesquero, fondo: peleaMed.fondo, tamano: peleaMed.tamano, kg: peleaMed.kg, distIni: peleaMed.distIni, tensionMax: r2(peleaMed.tensionMax), rojoSeg: r1(peleaMed.rojoSeg),
     saltos: peleaMed.saltos, lado: pelea ? pelea.lado : null, modo: pelea ? pelea.modo : null });
   peleaMed = null;
   guardarMed();
@@ -792,6 +915,7 @@ function caer(t) {
   ultimo = Math.hypot(destino.x - pj.position.x, destino.z - pj.position.z);
   const record = ultimo > mejor; if (record) mejor = ultimo;
   pintarLectura(record);
+  pintarFondo(ultimo);
   vuelo = null;
   med.lances++; if (med.distancias.length < 300) med.distancias.push(r1(ultimo));
   if (med.primerLanceSeg === null) { med.primerLanceSeg = Math.round(tiempo); guardarMed(); }
@@ -939,7 +1063,7 @@ function elegirLado(anterior, lados) {   // −1 izquierda, 0 adentro, +1 derech
 function saltar() {   // sale del agua y sacude la cabeza: la tensión pega un pico (otra razón para tener la Q a mano)
   pez.salto = 0; pico = Math.min(T_MAX, pico + 0.45);
   if (peleaMed) peleaMed.saltos++;
-  pezColgado.scale.setScalar(TAMANOS[pez.tamano].escala);
+  pezColgado.scale.setScalar(TAMANOS[pez.tamano].escala * pez.especie.escala);
   chapotear(pelea.p.x, pelea.p.z);
 }
 function soltarRef() {   // el pez que se fue vuelve al cardumen, desconfiado un rato
@@ -985,9 +1109,9 @@ function enganchar() {
   med.enganchados++; if (med.reaccionMs.length < 100) med.reaccionMs.push(Math.round(performance.now() - tMordida));   // cuánto tardó en clavar
   if (pez.avisada) med.enganchesAvisados++;
   enganchesTotales++; anotar('pesca.enganches', String(enganchesTotales));
-  const esp = pez.especie || ESPECIES.saltador, T = TAMANOS[pez.tamano];
+  const esp = pez.especie, T = TAMANOS[pez.tamano];
   const distIni = Math.hypot(enAgua.x - pj.position.x, enAgua.z - pj.position.z);
-  peleaMed = { t0: tiempo, usosQ: 0, bien: 0, mal: 0, vuelta: 0, especie: esp.nombre, tamano: pez.tamano, kg: r1(pez.kg), distIni: r1(distIni), tensionMax: 0, rojoSeg: 0, saltos: 0 };
+  peleaMed = { t0: tiempo, usosQ: 0, bien: 0, mal: 0, vuelta: 0, especie: esp.id, pesquero: pesqueroId, fondo: r1(profundidad(distIni)), tamano: pez.tamano, kg: r1(pez.kg), distIni: r1(distIni), tensionMax: 0, rojoSeg: 0, saltos: 0 };
   if (gesto) { gesto.x0 = gesto.x; gesto.y0 = gesto.y; gesto.nx = gesto.ny = gesto.d = 0; }   // si seguís con el click apretado, ya estás aguantando
   // arranca corriendo, con un respiro de 0,8 s antes de que la tensión pueda cortar; la fuerza (k) y el aguante salen de especie y tamaño
   pelea = { p: new THREE.Vector3(enAgua.x, 0, enAgua.z), energia: 1, modo: 'tira', modoT: lerp(esp.corrida[0], esp.corrida[1], azar()) + 0.6, lado: elegirLado(null, esp.lados),
@@ -998,7 +1122,7 @@ function enganchar() {
 }
 function sacarPez() {
   recogida.sacado = true; pez.fase = 'nada'; pez.colgado = 2.6; pez.salto = -1;
-  pezColgado.scale.setScalar(TAMANOS[pez.tamano].escala);
+  pezColgado.scale.setScalar(TAMANOS[pez.tamano].escala * pez.especie.escala);
   if (pez.ref) { pez.ref.estado = 'renacer'; pez.ref.tRenacer = 5 + azar() * 5; pez.ref = null; }   // en unos segundos aparece otro, en otro lado
   chapotear(se.p.x, se.p.z);
 }
@@ -1007,12 +1131,19 @@ function capturar() {
   if (pez.kg > pesoMax) pesoMax = pez.kg;
   med.pesoMax = r1(pesoMax);
   pintarLectura(false);
-  const especie = pez.especie ? pez.especie.nombre : 'pez', kg = r1(pez.kg), cual = `${especie} ${pez.tamano} · ${fmt(kg)} kg`;
+  const esp = pez.especie, kg = r1(pez.kg), nombre = esp.nombre.toLowerCase(), cual = `${nombre} ${tamanoDe(esp.id, pez.tamano)} · ${fmt(kg)} kg`;
   let texto = 'Capturado · ' + cual;
-  if (kg > mejorKgHistorico) {   // récord personal: sube al ranking (y si supera al primero, es récord del ranking)
+  // récord de la especie: sube a su ranking (y si supera al primero de esa especie, es récord de ese ranking)
+  if (kg > (recordsEspecie[esp.id] || 0)) {
+    const lider = rankingDeEspecie(esp.id)[0], esLider = !!window.__escucharRankingEspecies && (!lider || kg > lider.pesoMax);
+    recordsEspecie[esp.id] = kg; anotar('pesca.records', JSON.stringify(recordsEspecie));
+    subirRecordEspecie(esp.id, kg, pez.tamano);
+    texto = (esLider ? `¡Récord de ${nombre} del ranking! · ` : `Tu récord de ${nombre} · `) + cual;
+  }
+  if (kg > mejorKgHistorico) {   // el más pesado de todos: sube al ranking general (y si supera al primero, es récord del ranking); este aviso manda
     const lider = rankingTop[0], esLider = !!window.__escucharRanking && (!lider || kg > lider.pesoMax);
-    mejorKgHistorico = kg; anotar('pesca.mejorKg', String(kg)); anotar('pesca.mejorEspecie', especie); anotar('pesca.mejorTamano', pez.tamano);
-    subirRecord(kg, especie, pez.tamano);
+    mejorKgHistorico = kg; anotar('pesca.mejorKg', String(kg)); anotar('pesca.mejorEspecie', esp.id); anotar('pesca.mejorTamano', pez.tamano);
+    subirRecord(kg, esp.id, pez.tamano);
     texto = (esLider ? '¡Récord del ranking! · ' : 'Récord personal · ') + cual;
   }
   aviso(texto, null, 3.2);
@@ -1045,8 +1176,9 @@ function actualizarPez(dt, t) {
       const esp = ESPECIES[f.especie];
       pez.ref = f; f.estado = 'ocupado';
       pez.pos.copy(f.pos); pez.rumbo = f.rumbo; pez.opac = f.opac;
-      pez.especie = esp; pez.tamano = f.tamano; pez.kg = f.kg; pez.avisada = false; pez.avisoPicando = false;
-      sombraPez.scale.set(TAMANOS[f.tamano].sombra, 1, TAMANOS[f.tamano].sombra);
+      pez.especie = esp; pez.tamano = f.tamano; pez.kg = f.kg; pez.avisada = false; pez.avisoPicando = false; pez.insistio = false;
+      const s = TAMANOS[f.tamano].sombra * esp.escala; sombraPez.scale.set(s, 1, s);
+      escama.color.set(esp.color);
       pez.fase = 'acercando'; pez.mordidas = esp.picadas[0] + Math.floor(azar() * (esp.picadas[1] - esp.picadas[0] + 1)); med.peces++;
     }
   } else if (pez.fase === 'acercando') {
@@ -1067,6 +1199,10 @@ function actualizarPez(dt, t) {
         if (esPrincipiante() && !pez.avisoPicando) { pez.avisoPicando = true; aviso('Está picando: todavía no', 'frio', 1.2); }
       }
       else morder();
+    } else if (pez.fase === 'mordida' && pez.t <= 0 && pez.especie.insiste && !pez.insistio) {
+      // la tararira: si no la clavaste, muchas veces vuelve a atacar (una vez)
+      pez.insistio = true; pez.fase = 'picando'; pez.mordidas = 0; pez.t = 0.6 + azar() * 0.8; med.seFueron++;
+      aviso('Erró… puede volver', 'frio', 1.2);
     } else if (pez.fase === 'mordida' && pez.t <= 0) {
       pez.rumbo += Math.PI; pez.fase = 'huyendo'; pez.t = 1.1; aviso('Se fue', 'frio'); med.seFueron++;
     } else if (pez.fase === 'enganchado') {
@@ -1208,6 +1344,11 @@ const PISTAS = {
 };
 let pistaActual = null;
 function pintarPista(clave) { if (clave !== pistaActual) { pistaActual = clave; elPista.innerHTML = PISTAS[clave]; } }
+let fondoMostrado = null;
+function pintarFondo(d) {   // el fondo a d metros del muelle, en el pesquero de ahora
+  const txt = fmt(profundidad(d)) + ' m';
+  if (txt !== fondoMostrado) { fondoMostrado = txt; $('#fondo').textContent = txt; }
+}
 function pintarLectura(record) {
   elDist.innerHTML = (ultimo ? fmt(ultimo) : '—') + '<small>m</small>'; distMostrada = null;
   elMejor.textContent = mejor ? fmt(mejor) + ' m' : '—';
@@ -1227,14 +1368,14 @@ function mostrarPanel(p, ver) {
   botonDe.get(p).setAttribute('aria-expanded', String(ver));
   if (ver) for (const otro of botonDe.keys()) if (otro !== p && !otro.hidden) mostrarPanel(otro, false);
   if (p === panelAyuda && ver) med.ayudaAbierta = true;
-  if (p === panelAyuda && !ver) { try { localStorage.setItem('pesca.ayudaVista', '1'); } catch (e) { /* sin almacenamiento: vuelve a aparecer la próxima vez */ } }
+  if (p === panelAyuda && !ver) { ayudaVista = true; try { localStorage.setItem('pesca.ayudaVista', '1'); } catch (e) { /* sin almacenamiento: vuelve a aparecer la próxima vez */ } }
   if (p === panelFin && ver) pintarResumen();
 }
 btnCamara.addEventListener('click', () => mostrarPanel(panel, panel.hidden));
 btnAyuda.addEventListener('click', () => mostrarPanel(panelAyuda, panelAyuda.hidden));
 btnTerminar.addEventListener('click', () => mostrarPanel(panelFin, panelFin.hidden));
 btnRanking.addEventListener('click', () => mostrarPanel(panelRanking, panelRanking.hidden));
-$('#btnEntendido').addEventListener('click', () => mostrarPanel(panelAyuda, false));
+$('#btnEntendido').addEventListener('click', () => { mostrarPanel(panelAyuda, false); siguientePanel(); });
 $('#btnSeguir').addEventListener('click', () => mostrarPanel(panelFin, false));
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const p of botonDe.keys()) if (!p.hidden) mostrarPanel(p, false); });
 
@@ -1279,7 +1420,7 @@ let nombreJugador = leer('pesca.nombre') || '';
 let mejorKgHistorico = Number(leer('pesca.mejorKg')) || 0;   // el mejor pez de este jugador, de todas sus sesiones
 let enganchesTotales = Number(leer('pesca.enganches')) || 0;  // los peces que enganchó, de todas sus sesiones: decide si se le avisa la mordida
 med.jugador = jugadorId; med.nombre = nombreJugador;
-const ayudaVista = leer('pesca.ayudaVista') === '1';
+let ayudaVista = leer('pesca.ayudaVista') === '1';   // también sin almacenamiento: cerrarla una vez alcanza en esta visita
 function pedirNombre() {
   $('#inNombre').value = nombreJugador; panelNombre.hidden = false;
   setTimeout(() => $('#inNombre').focus(), 50);
@@ -1291,7 +1432,7 @@ function confirmarNombre() {
   panelNombre.hidden = true;
   if (mejorKgHistorico > 0) subirRecord(mejorKgHistorico, leer('pesca.mejorEspecie') || '', leer('pesca.mejorTamano') || '');   // el ranking toma el nombre nuevo
   pintarRanking();
-  if (primeraVez && !ayudaVista) mostrarPanel(panelAyuda, true);
+  if (primeraVez) siguientePanel();
 }
 $('#btnNombre').addEventListener('click', confirmarNombre);
 $('#inNombre').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmarNombre(); });
@@ -1309,13 +1450,18 @@ function pintarRanking() {
     const li = document.createElement('li'); if (r.jugador === jugadorId) li.className = 'yo';
     const n = document.createElement('span'), kg = document.createElement('span'), cual = document.createElement('span');
     n.textContent = r.nombre; kg.className = 'kg'; kg.textContent = fmt(r.pesoMax) + ' kg';
-    cual.className = 'cual'; cual.textContent = [r.especie, r.tamano].filter(Boolean).join(' ');
+    cual.className = 'cual'; cual.textContent = [nombreEspecie(r.especie), tamanoDe(r.especie, r.tamano)].filter(Boolean).join(' ');
     li.append(n, kg, cual); ol.appendChild(li);
   });
+  pintarPestanas();
+  if (pestana !== 'general') pintarRankingEspecies();
+  $('#rankingGeneral').hidden = pestana !== 'general'; $('#rankingEspecies').hidden = pestana === 'general';
   const puesto = rankingTop.findIndex((r) => r.jugador === jugadorId) + 1;
-  $('#miRanking').textContent = (nombreJugador ? nombreJugador + ': ' : '') +
+  $('#miRanking').textContent = pestana !== 'general' ? '' : (nombreJugador ? nombreJugador + ': ' : '') +
     (mejorKgHistorico ? `tu mejor pez pesó ${fmt(mejorKgHistorico)} kg` + (puesto ? `, puesto ${puesto}` : '') : 'todavía no sacaste ninguno');
 }
+// hasta la ronda 4 las especies eran de trabajo (corredor, tirador, saltador): esas entradas se muestran con su nombre viejo
+const nombreEspecie = (id) => (ESPECIES[id] ? ESPECIES[id].nombre.toLowerCase() : id);
 function subirRecord(kg, especie, tamano) {
   if (!window.__guardarRanking) return;
   window.__guardarRanking(jugadorId, { jugador: jugadorId, nombre: nombreJugador || 'Anónimo', pesoMax: r1(kg), especie, tamano, version: VERSION_JUEGO })
@@ -1330,11 +1476,96 @@ if (MODO_PRUEBA && window.__escucharRanking) {
     pintarRanking();
   });
 }
+
+/* ——— El ranking por especie (ronda 5): el más pesado de cada jugador en cada especie, por pesquero ——— */
+let rankingEspecies = [], pestana = 'general';
+let recordsEspecie = {};
+try { recordsEspecie = JSON.parse(leer('pesca.records') || '{}') || {}; } catch (e) { recordsEspecie = {}; }
+const rankingDeEspecie = (id) => rankingEspecies.filter((r) => r.especie === id).sort((a, b) => b.pesoMax - a.pesoMax);
+function pintarPestanas() {
+  const cont = $('#pestanas');
+  if (!cont.children.length) {
+    for (const [id, txt] of [['general', 'General'], ...Object.entries(PESQUEROS).map(([k, P]) => [k, P.corto])]) {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.dataset.pestana = id;
+      b.addEventListener('click', () => { pestana = id; pintarRanking(); });
+      cont.appendChild(b);
+    }
+  }
+  for (const b of cont.children) b.setAttribute('aria-selected', String(b.dataset.pestana === pestana));
+}
+function pintarRankingEspecies() {
+  const cont = $('#rankingEspecies'); cont.textContent = '';
+  const P = PESQUEROS[pestana];
+  const nota = document.createElement('p'); nota.className = 'fuente';
+  nota.textContent = window.__escucharRankingEspecies ? `${P.nombre}: el más pesado de cada jugador en cada especie.` : 'El ranking está en la versión web.';
+  cont.appendChild(nota);
+  for (const id of Object.keys(P.peces)) {
+    const esp = ESPECIES[id], lista = rankingDeEspecie(id), sec = document.createElement('div'); sec.className = 'especie';
+    const h = document.createElement('h3'), sm = document.createElement('small');
+    h.textContent = esp.nombre; sm.textContent = `récord real ${fmt(esp.kgRecord)} kg`; h.appendChild(sm);
+    const ol = document.createElement('ol'); ol.className = 'tabla';
+    if (!lista.length) { const li = document.createElement('li'); li.className = 'vacio'; li.textContent = 'Nadie sacó uno todavía.'; ol.appendChild(li); }
+    lista.slice(0, 3).forEach((r) => {
+      const li = document.createElement('li'); if (r.jugador === jugadorId) li.className = 'yo';
+      const n = document.createElement('span'), kg = document.createElement('span');
+      n.textContent = r.nombre; kg.className = 'kg'; kg.textContent = fmt(r.pesoMax) + ' kg';
+      li.append(n, kg); ol.appendChild(li);
+    });
+    sec.append(h, ol);
+    const puesto = lista.findIndex((r) => r.jugador === jugadorId) + 1;
+    if (recordsEspecie[id] && puesto > 3) { const yo = document.createElement('p'); yo.className = 'fuente'; yo.textContent = `Vos: ${fmt(recordsEspecie[id])} kg, puesto ${puesto}`; sec.appendChild(yo); }
+    cont.appendChild(sec);
+  }
+}
+function subirRecordEspecie(especie, kg, tamano) {
+  if (!window.__guardarRecordEspecie) return;
+  window.__guardarRecordEspecie(especie + '_' + jugadorId, { jugador: jugadorId, nombre: nombreJugador || 'Anónimo', especie, pesquero: pesqueroId, pesoMax: r1(kg), tamano, version: VERSION_JUEGO })
+    .catch(() => { /* rechazado: el ranking de la especie se queda como estaba */ });
+}
+if (MODO_PRUEBA && window.__escucharRankingEspecies) {
+  window.__escucharRankingEspecies((lista) => {
+    if (!lista) return;
+    rankingEspecies = lista.filter((r) => !/^PRUEBA/.test(r.nombre || ''));
+    for (const r of rankingEspecies) if (r.jugador === jugadorId && r.pesoMax > (recordsEspecie[r.especie] || 0)) recordsEspecie[r.especie] = r.pesoMax;
+    anotar('pesca.records', JSON.stringify(recordsEspecie));
+    pintarRanking();
+  });
+}
 pintarRanking();
 
-// al entrar: en la prueba, primero el nombre (la primera vez) y después el instructivo
-if (MODO_PRUEBA && !nombreJugador) pedirNombre();
-else if (!ayudaVista) mostrarPanel(panelAyuda, true);
+/* ——— El pesquero: elegir el agua ——— */
+const btnPesquero = $('#btnPesquero'), panelPesquero = $('#panelPesquero');
+botonDe.set(panelPesquero, btnPesquero);
+btnPesquero.addEventListener('click', () => mostrarPanel(panelPesquero, panelPesquero.hidden));
+let pesqueroElegido = leer('pesca.pesquero') !== null;   // el primero que se elige a mano; hasta entonces, el panel se abre solo una vez
+function pintarPesqueros() {
+  btnPesquero.textContent = pesquero.corto;
+  const cont = $('#lugares'); cont.textContent = '';
+  for (const [id, P] of Object.entries(PESQUEROS)) {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(id === pesqueroId));
+    const t = document.createElement('b'), s1 = document.createElement('span'), s2 = document.createElement('span');
+    t.textContent = P.nombre; s1.textContent = P.texto;
+    s2.textContent = Object.keys(P.peces).map((e) => ESPECIES[e].nombre).join(' · ') + ` — fondo de ${fmt(P.fondo[0])} a ${fmt(P.fondo[1])} m`;
+    b.append(t, s1, s2);
+    b.addEventListener('click', () => cambiarPesquero(id));
+    cont.appendChild(b);
+  }
+}
+function cambiarPesquero(id) {
+  if (id !== pesqueroId && estado !== 'listo') { aviso('Recogé la boya para cambiar de pesquero', 'frio', 2.2); return; }
+  pesqueroElegido = true; anotar('pesca.pesquero', id);
+  if (id !== pesqueroId) { elegirPesquero(id); med.pesquero = id; fondoMostrado = null; $('#fondo').textContent = '—'; aviso(pesquero.nombre, null, 1.8); }
+  pintarPesqueros(); mostrarPanel(panelPesquero, false);
+}
+pintarPesqueros();
+
+// al entrar, de a uno: el nombre (en la prueba, la primera vez), el instructivo (la primera vez) y el pesquero (hasta elegir uno)
+function siguientePanel() {
+  if (MODO_PRUEBA && !nombreJugador) pedirNombre();
+  else if (!ayudaVista && panelAyuda.hidden) mostrarPanel(panelAyuda, true);
+  else if (!pesqueroElegido && panelPesquero.hidden) mostrarPanel(panelPesquero, true);
+}
+siguientePanel();
 const salidas = {}, entradas = {}, tocada = { reposo: false, carga: false };
 for (const p of PERILLAS) {
   const fila = document.createElement('div'); fila.className = 'perilla';
@@ -1579,6 +1810,7 @@ function cuadro(ms) {
   // tiempo sin jugar con la boya en el agua (más de 10 s sin tocar nada): para no leer una boya abandonada como mordidas perdidas
   if (conLinea() && performance.now() - ultimoInput > 10000) inactivo += dt;
   if (estado === 'cargando') {
+    pintarFondo(lerp(R_MIN, R_MAX, carga));   // mientras cargás, el fondo de donde caería: para elegir la profundidad
     elRelleno.style.width = (carga * 100) + '%';
     const lleno = tCarga >= T_CARGA; elBarra.classList.toggle('lleno', lleno);
     elFantasma.hidden = true; pintarPista(lleno ? 'lleno' : 'cargando');
