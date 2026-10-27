@@ -844,7 +844,7 @@ const tactil = window.matchMedia && matchMedia('(pointer: coarse)').matches;
    (window.__guardarPartida) la agrega sólo esa versión, así que acá guardarMed() no hace nada.
    Se guarda en momentos con sentido: el primer lance, cada 5 lances, cada pelea terminada, al terminar y al irse. */
 const MODO_PRUEBA = (document.querySelector('meta[name="pesca:modo"]') || {}).content === 'prueba';
-const VERSION_JUEGO = '2026-10-26b';     // se ve junto al título: cambiarla en cada publicación
+const VERSION_JUEGO = '2026-10-27a';     // se ve junto al título: cambiarla en cada publicación
 const r1 = (x) => Math.round(x * 10) / 10;
 const med = {
   sesion: Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
@@ -854,9 +854,12 @@ const med = {
   lances: 0, distancias: [], peces: 0, asustados: 0, mordidas: 0, seFueron: 0, enganchados: 0,
   reaccionMs: [], peleas: [], capturas: 0, diversion: null, comentario: '', terminada: false, estadoAlGuardar: '',
   avisosQ: 0, inactivoSeg: 0, pesoMax: 0, lancesCerca: 0, jugador: '', nombre: '',
-  mordidasAvisadas: 0, enganchesAvisados: 0, pesquero: pesqueroId
+  mordidasAvisadas: 0, enganchesAvisados: 0, pesquero: pesqueroId,
+  perdidas: [], segundasMordidas: 0, enganchesSegunda: 0
 };
 let peleaMed = null, guardando = false, guardarDeNuevo = false, tMordida = 0, soltandoAntes = false;
+// Desde la 2026-10-27a: qué hizo el jugador en cada mordida que no clavó (ver perderMordida)
+let mordidaMed = null, perdidaTarde = null, ultimoY = null;
 async function guardarMed() {
   if (!window.__guardarPartida) return;
   if (guardando) { guardarDeNuevo = true; return; }   // una escritura a la vez; la que espera sale con los datos al día
@@ -926,12 +929,17 @@ function recoger() {
   const R = Math.hypot(se.p.x - pj.position.x, se.p.z - pj.position.z);
   estado = 'recogiendo';
   recogida = { desde: se.p.clone(), t: 0, dur: (0.45 + R * 0.03) * (conPez ? 1.7 : 1), ultimoAnillo: 0, conPez, sacado: false };
+  if (pez.fase === 'mordida') perderMordida('recogio');   // cobró la boya hasta el muelle con el pez mordiendo
   if (conPez) pez.rumbo = Math.atan2(-(pj.position.z - se.p.z), pj.position.x - se.p.x);   // la cabeza hacia el muelle: lo traen de la boca
   else if (pez.fase === 'acercando' || pez.fase === 'picando' || pez.fase === 'mordida') { pez.rumbo += Math.PI; pez.fase = 'huyendo'; pez.t = 1.1; }
   else if (pez.fase !== 'huyendo') pez.fase = 'nada';
   acumClic = 0; enAgua = null; tension = 0; pico = 0; gesto = null; pelea = null;
 }
-function empezarTiron(x, y) { gesto = { x0: x, y0: y, x, y, nx: 0, ny: 0, d: 0, t: performance.now(), sono: false }; }
+function empezarTiron(x, y) {
+  gesto = { x0: x, y0: y, x, y, nx: 0, ny: 0, d: 0, t: performance.now(), sono: false };
+  if (mordidaMed && mordidaMed.clicMs === null) mordidaMed.clicMs = Math.round(performance.now() - mordidaMed.t0);
+  if (perdidaTarde) marcarTarde();
+}
 function moverTiron(x, y) {
   const ahora = performance.now(), dts = Math.max(0.004, (ahora - gesto.t) / 1000), H = window.innerHeight;
   const nx = (x - gesto.x0) / H, ny = (gesto.y0 - y) / H;   // en pantallas: derecha y arriba positivos
@@ -943,6 +951,9 @@ function moverTiron(x, y) {
   if (dd <= 0) return;                                        // bajar el mouse no tira: sólo cuenta lo que subís
   const v = Math.min(6, dd / dts);
   pico = Math.min(T_MAX, pico + GANANCIA * dd * v); tension = pico;
+  if (mordidaMed) mordidaMed.picoMax = Math.max(mordidaMed.picoMax, pico);
+  if (pez.fase === 'picando') pez.picoPicada = Math.max(pez.picoPicada || 0, pico);
+  if (perdidaTarde) marcarTarde();
   const dx = pj.position.x - enAgua.ox, dz = pj.position.z - enAgua.oz, dist = Math.hypot(dx, dz);
   const paso = Math.min(dd * METROS_POR_PANTALLA, Math.max(0, dist - 2.5));   // la boya viene hacia vos, hasta 2,5 m del muelle
   enAgua.ox += dx / dist * paso; enAgua.oz += dz / dist * paso;
@@ -1097,6 +1108,9 @@ const esPrincipiante = () => enganchesTotales < PRINCIPIANTE;
 function morder() {
   pez.fase = 'mordida'; pez.t = pez.especie ? pez.especie.ventana : VENTANA_MORDIDA;   // el tirador da más tiempo, el corredor menos
   med.mordidas++; tMordida = performance.now();
+  if (pez.insistio) med.segundasMordidas++;   // el segundo ataque de la tararira: es el mismo pez, no otra mordida
+  perdidaTarde = null;
+  mordidaMed = { t0: tMordida, segunda: !!pez.insistio, apretado: !!gesto, clicMs: null, picoMax: 0, sinClic: 0, cobrando: false };
   pez.avisada = esPrincipiante();
   if (pez.avisada) { med.mordidasAvisadas++; aviso(tactil ? '¡Mordió! Arrastrá hacia arriba' : '¡Mordió! Click izquierdo y subí el mouse', null, pez.t); }
   const dist = Math.hypot(se.p.x - pj.position.x, se.p.z - pj.position.z);
@@ -1104,10 +1118,29 @@ function morder() {
   anillo(se.p.x, se.p.z, 0, 1.4, 1.0, 0.6);
   sonPlop(dist * 1.6);
 }
+// Una mordida que no se clavó: qué hizo el jugador mientras duraba. En la ronda 5 se clavaron 4 de 15 y sólo había
+// tiempos de las que sí; con esto se distingue no verla, no saber el gesto (subir el mouse sin el click, o click sin
+// subir), tirar flojo o tirar tarde. motivo: 'vencio' (se fue), 'insiste' (la tararira vuelve) o 'recogio' (cobró la
+// boya hasta el muelle). Si no tiró, se mira 1,5 s más por si tiró tarde (tardeMs).
+function perderMordida(motivo) {
+  if (!mordidaMed) return;
+  const m = mordidaMed; mordidaMed = null;
+  const p = { especie: pez.especie.id, ventanaMs: Math.round(pez.especie.ventana * 1000), aviso: !!pez.avisada, segunda: m.segunda, motivo,
+    apretado: m.apretado, clicMs: m.clicMs, pico: r2(m.picoMax), sinClic: r2(m.sinClic), cobrando: m.cobrando, picada: r2(pez.picoPicada || 0), tardeMs: null };
+  if (med.perdidas.length < 100) med.perdidas.push(p);
+  perdidaTarde = motivo === 'recogio' ? null : { p, t: performance.now() };
+}
+function marcarTarde() {
+  const ms = performance.now() - perdidaTarde.t;
+  if (ms <= 1500) perdidaTarde.p.tardeMs = Math.round(ms);
+  perdidaTarde = null;
+}
 function enganchar() {
   estado = 'enganchado'; pez.fase = 'enganchado'; pez.chapoteo = 0.25; pico = 0;
   med.enganchados++; if (med.reaccionMs.length < 100) med.reaccionMs.push(Math.round(performance.now() - tMordida));   // cuánto tardó en clavar
   if (pez.avisada) med.enganchesAvisados++;
+  if (pez.insistio) med.enganchesSegunda++;
+  mordidaMed = null;
   enganchesTotales++; anotar('pesca.enganches', String(enganchesTotales));
   const esp = pez.especie, T = TAMANOS[pez.tamano];
   const distIni = Math.hypot(enAgua.x - pj.position.x, enAgua.z - pj.position.z);
@@ -1176,7 +1209,7 @@ function actualizarPez(dt, t) {
       const esp = ESPECIES[f.especie];
       pez.ref = f; f.estado = 'ocupado';
       pez.pos.copy(f.pos); pez.rumbo = f.rumbo; pez.opac = f.opac;
-      pez.especie = esp; pez.tamano = f.tamano; pez.kg = f.kg; pez.avisada = false; pez.avisoPicando = false; pez.insistio = false;
+      pez.especie = esp; pez.tamano = f.tamano; pez.kg = f.kg; pez.avisada = false; pez.avisoPicando = false; pez.insistio = false; pez.picoPicada = 0;
       const s = TAMANOS[f.tamano].sombra * esp.escala; sombraPez.scale.set(s, 1, s);
       escama.color.set(esp.color);
       pez.fase = 'acercando'; pez.mordidas = esp.picadas[0] + Math.floor(azar() * (esp.picadas[1] - esp.picadas[0] + 1)); med.peces++;
@@ -1201,9 +1234,11 @@ function actualizarPez(dt, t) {
       else morder();
     } else if (pez.fase === 'mordida' && pez.t <= 0 && pez.especie.insiste && !pez.insistio) {
       // la tararira: si no la clavaste, muchas veces vuelve a atacar (una vez)
+      perderMordida('insiste');
       pez.insistio = true; pez.fase = 'picando'; pez.mordidas = 0; pez.t = 0.6 + azar() * 0.8; med.seFueron++;
       aviso('Erró… puede volver', 'frio', 1.2);
     } else if (pez.fase === 'mordida' && pez.t <= 0) {
+      perderMordida('vencio');
       pez.rumbo += Math.PI; pez.fase = 'huyendo'; pez.t = 1.1; aviso('Se fue', 'frio'); med.seFueron++;
     } else if (pez.fase === 'enganchado') {
       pez.chapoteo -= dt;
@@ -1271,6 +1306,9 @@ window.addEventListener('keyup', (e) => { if (esQ(e)) teclaQ = false; });
 window.addEventListener('pointermove', (e) => {
   ultimoInput = performance.now();
   if (e.pointerType === 'mouse' && e.buttons !== botones) botonesMouse(e);
+  // subir el mouse sin el click izquierdo, con el pez mordiendo: reaccionó pero no sabe el gesto
+  if (mordidaMed && !gesto && e.pointerType === 'mouse' && ultimoY !== null) mordidaMed.sinClic += Math.max(0, ultimoY - e.clientY) / window.innerHeight;
+  ultimoY = e.clientY;
   if (gesto) { moverTiron(e.clientX, e.clientY); return; }
   if (estado !== 'listo' && estado !== 'cargando') return;
   yawObj = -(e.clientX / window.innerWidth - 0.5) * 2 * YAW_MAX;
@@ -1692,6 +1730,7 @@ function cuadro(ms) {
   pj.updateMatrixWorld(true);
   punta.getWorldPosition(tip);
   cobrando = ((botones & 2) !== 0 || cobrandoTactil) && conLinea();
+  if (mordidaMed && cobrando) mordidaMed.cobrando = true;
   soltando = (teclaQ || soltandoTactil) && estado === 'enganchado';
   if (soltando && !soltandoAntes && peleaMed) peleaMed.usosQ++;
   if (soltando) qUsada = true;
